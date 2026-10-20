@@ -65,3 +65,11 @@ would rule out system-wide Now Playing and the whole Dev tab (ports, stopping se
 Application certificate and notarized by Apple. One-time setup is described at the top of the
 script. Bump `CFBundleShortVersionString` and `CFBundleVersion` in `Resources/Info.plist` for each
 release.
+
+Updates use [Sparkle](https://sparkle-project.org). The release script also writes `build/appcast.xml`,
+signed with the EdDSA key in your login keychain (made once with Sparkle's `generate_keys`, whose
+public half is `SUPublicEDKey` in Info.plist). Attach the DMG and `appcast.xml` to a GitHub release
+tagged `v<version>`; the app reads the feed from the latest release.
+
+The Homebrew cask lives in `packaging/homebrew/notchdeck.rb`. Copy it to
+[chiranjeebhub/homebrew-tap](https://github.com/chiranjeebhub/homebrew-tap) with the new version and checksum.

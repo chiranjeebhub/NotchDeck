@@ -29,6 +29,13 @@ UNIVERSAL=1 scripts/build-app.sh
 # innermost first.
 codesign --force --timestamp --options runtime --sign "$IDENTITY" \
     "$APP/Contents/Resources/MediaRemoteAdapter.dylib"
+SPARKLE="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
+for item in "$SPARKLE/XPCServices/Installer.xpc" "$SPARKLE/XPCServices/Downloader.xpc" \
+            "$SPARKLE/Autoupdate" "$SPARKLE/Updater.app"; do
+    [[ -e "$item" ]] || continue
+    codesign --force --timestamp --options runtime --preserve-metadata=entitlements --sign "$IDENTITY" "$item"
+done
+codesign --force --timestamp --options runtime --sign "$IDENTITY" "$APP/Contents/Frameworks/Sparkle.framework"
 codesign --force --timestamp --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 
@@ -65,4 +72,18 @@ xcrun stapler staple "$DMG"
 spctl --assess --type open --context context:primary-signature --verbose "$DMG"
 xcrun stapler validate "$APP"
 
+# Sparkle update feed for this release, signed with the EdDSA key in the login keychain
+# (created once with Sparkle's generate_keys). Upload it next to the DMG on the GitHub release.
+GENERATE_APPCAST="$(find .build/artifacts -type f -name generate_appcast -perm -u+x | head -1)"
+FEED_DIR="build/appcast"
+rm -rf "$FEED_DIR"
+mkdir -p "$FEED_DIR"
+cp "$DMG" "$FEED_DIR/"
+"$GENERATE_APPCAST" --download-url-prefix "https://github.com/chiranjeebhub/NotchDeck/releases/download/v$VERSION/" \
+    -o "$FEED_DIR/appcast.xml" "$FEED_DIR"
+cp "$FEED_DIR/appcast.xml" build/appcast.xml
+
 echo "Notarized: $DMG"
+echo "Update feed: build/appcast.xml"
+echo "SHA-256 (for the Homebrew cask): $(shasum -a 256 "$DMG" | cut -d' ' -f1)"
+echo "Publish: gh release create v$VERSION \"$DMG\" build/appcast.xml --title \"NotchDeck $VERSION\""

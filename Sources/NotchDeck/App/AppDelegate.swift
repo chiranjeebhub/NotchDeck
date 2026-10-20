@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NowPlayingService.shared.start()
         CalendarService.shared.start()
         SystemStatsService.shared.startSampling()
+        UpdaterService.shared.start()
         rebuildNotches()
 
         let center = NotificationCenter.default
@@ -57,6 +58,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         menu.addItem(withTitle: "Open Notch", action: #selector(openNotch), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings(_:)), keyEquivalent: ",").target = self
+        if UpdaterService.shared.isAvailable {
+            menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
+        }
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit NotchDeck", action: #selector(quit), keyEquivalent: "q").target = self
         item.menu = menu
@@ -87,6 +91,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         NSApp.activate()
         settingsWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    @objc private func checkForUpdates() {
+        UpdaterService.shared.checkForUpdates()
     }
 
     @objc private func quit() {

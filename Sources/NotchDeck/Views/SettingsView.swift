@@ -59,7 +59,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .media: "player spotify music fallback"
         case .calendar: "calendars day month events"
         case .permissions: "privacy access automation calendar"
-        case .about: "version github"
+        case .about: "version github updates sparkle"
         }
     }
 
@@ -578,6 +578,8 @@ private struct PermissionsSettings: View {
 // MARK: - About
 
 private struct AboutSettings: View {
+    @ObservedObject private var updater = UpdaterService.shared
+
     private var version: String {
         let info = Bundle.main.infoDictionary
         let short = info?["CFBundleShortVersionString"] as? String ?? "dev"
@@ -600,7 +602,20 @@ private struct AboutSettings: View {
                     }
                 }
                 .padding(.vertical, 6)
-                Link("Source code on GitHub", destination: URL(string: "https://github.com/chiranjeebhub/notch_utility")!)
+                Link("Source code on GitHub", destination: URL(string: "https://github.com/chiranjeebhub/NotchDeck")!)
+            }
+            Section("Updates") {
+                if updater.isAvailable {
+                    Toggle("Check for updates automatically", isOn: Binding(
+                        get: { updater.automaticallyChecks },
+                        set: { updater.automaticallyChecks = $0 }
+                    ))
+                    LabeledContent("Updates") {
+                        Button("Check Now") { updater.checkForUpdates() }
+                    }
+                } else {
+                    Caption("This is a local build. Updates are available in the release downloaded from GitHub.")
+                }
             }
         }
     }

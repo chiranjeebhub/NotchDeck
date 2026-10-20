@@ -19,6 +19,15 @@ BIN_DIR="$(swift build -c "$CONFIG" ${ARCH_FLAGS[@]+"${ARCH_FLAGS[@]}"} --show-b
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/NotchDeck" "$APP/Contents/MacOS/NotchDeck"
+
+# Sparkle (self-updates) is a framework, embedded in Contents/Frameworks.
+mkdir -p "$APP/Contents/Frameworks"
+SPARKLE="$BIN_DIR/Sparkle.framework"
+if [[ ! -d "$SPARKLE" ]]; then
+    SPARKLE="$(find .build/artifacts -type d -path '*macos*/Sparkle.framework' -prune | head -1)"
+fi
+ditto "$SPARKLE" "$APP/Contents/Frameworks/Sparkle.framework"
+install_name_tool -add_rpath "@executable_path/../Frameworks" "$APP/Contents/MacOS/NotchDeck" 2>/dev/null || true
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
 # App icon: render every size from the 1024px master and pack it into an .icns.
@@ -40,6 +49,7 @@ cp Adapter/MediaRemoteAdapter.pl "$APP/Contents/Resources/MediaRemoteAdapter.pl"
 codesign --force --sign - "$APP/Contents/Resources/MediaRemoteAdapter.dylib"
 
 # Ad-hoc sign so macOS privacy prompts (Automation, Calendar) attach to the bundle.
+codesign --force --sign - "$APP/Contents/Frameworks/Sparkle.framework"
 codesign --force --sign - "$APP"
 
 echo "Built $APP"
