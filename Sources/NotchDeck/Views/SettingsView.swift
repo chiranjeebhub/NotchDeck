@@ -23,15 +23,15 @@ enum SettingsPage: String, CaseIterable, Identifiable {
 
     var systemImage: String {
         switch self {
-        case .general: "gearshape"
-        case .appearance: "paintbrush"
-        case .home: "rectangle.3.group"
-        case .tray: "tray"
-        case .dev: "terminal"
+        case .general: "gearshape.fill"
+        case .appearance: "paintbrush.fill"
+        case .home: "rectangle.3.group.fill"
+        case .tray: "tray.fill"
+        case .dev: "terminal.fill"
         case .media: "music.note"
         case .calendar: "calendar"
-        case .permissions: "hand.raised"
-        case .about: "info.circle"
+        case .permissions: "hand.raised.fill"
+        case .about: "info"
         }
     }
 
@@ -127,14 +127,30 @@ struct SettingsView: View {
             Label {
                 Text(page.title)
             } icon: {
-                Image(systemName: page.systemImage)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .frame(width: 20, height: 20)
-                    .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(page.tint.gradient))
+                SettingsIcon(page: page)
             }
             .tag(page)
         }
+    }
+}
+
+/// System Settings–style tile: a white glyph centred in a coloured rounded square.
+/// The glyph is sized explicitly, because the sidebar otherwise scales symbols to fill the tile.
+private struct SettingsIcon: View {
+    let page: SettingsPage
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 5, style: .continuous)
+            .fill(page.tint.gradient)
+            .frame(width: 20, height: 20)
+            .overlay {
+                Image(systemName: page.systemImage)
+                    .resizable()
+                    .scaledToFit()
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.white)
+                    .frame(width: 12, height: 12)
+            }
     }
 }
 
