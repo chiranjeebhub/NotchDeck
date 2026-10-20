@@ -29,7 +29,7 @@ final class TrayStore: ObservableObject {
     /// Where dropped files are copied when "Copy dropped files" is on.
     nonisolated static let copiesDirectory: URL = {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        return support.appendingPathComponent("NotchUtility/Tray", isDirectory: true)
+        return support.appendingPathComponent("NotchDeck/Tray", isDirectory: true)
     }()
 
     func add(_ urls: [URL]) {
@@ -57,7 +57,7 @@ final class TrayStore: ObservableObject {
             try FileManager.default.copyItem(at: url, to: destination)
             return destination
         } catch {
-            NSLog("NotchUtility: couldn't copy \(url.path) into the tray: \(error)")
+            NSLog("NotchDeck: couldn't copy \(url.path) into the tray: \(error)")
             return url
         }
     }

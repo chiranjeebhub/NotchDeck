@@ -52,7 +52,7 @@ final class MediaRemoteAdapter {
         do {
             try process.run()
         } catch {
-            NSLog("NotchUtility: could not start MediaRemote adapter: \(error)")
+            NSLog("NotchDeck: could not start MediaRemote adapter: \(error)")
             return false
         }
         self.process = process

@@ -2,7 +2,7 @@ import AppKit
 
 @main
 @MainActor
-enum NotchUtilityMain {
+enum NotchDeckMain {
     static let delegate = AppDelegate()
 
     static func main() {

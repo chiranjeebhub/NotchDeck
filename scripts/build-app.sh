@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Builds NotchUtility.app into ./build using SwiftPM (no Xcode project needed).
+# Builds NotchDeck.app into ./build using SwiftPM (no Xcode project needed).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 CONFIG="${CONFIG:-release}"
-APP="build/NotchUtility.app"
+APP="build/NotchDeck.app"
 
 swift build -c "$CONFIG"
 BIN_DIR="$(swift build -c "$CONFIG" --show-bin-path)"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN_DIR/NotchUtility" "$APP/Contents/MacOS/NotchUtility"
+cp "$BIN_DIR/NotchDeck" "$APP/Contents/MacOS/NotchDeck"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 
 # App icon: render every size from the 1024px master and pack it into an .icns.

@@ -15,8 +15,8 @@ jobs:
       - name: Build app bundle
         run: ./scripts/build-app.sh
       - name: Zip app
-        run: cd build && ditto -c -k --keepParent NotchUtility.app NotchUtility.zip
+        run: cd build && ditto -c -k --keepParent NotchDeck.app NotchDeck.zip
       - uses: actions/upload-artifact@v4
         with:
-          name: NotchUtility
-          path: build/NotchUtility.zip
+          name: NotchDeck
+          path: build/NotchDeck.zip

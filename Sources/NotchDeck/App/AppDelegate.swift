@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastShowOnAllDisplays = true
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppSettings.migrateFromNotchUtility()
         AppSettings.registerDefaults()
         lastShowOnAllDisplays = AppSettings.showOnAllDisplays
 
@@ -51,13 +52,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func setUpStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = NSImage(systemSymbolName: "menubar.rectangle", accessibilityDescription: "NotchUtility")
+        item.button?.image = NSImage(systemSymbolName: "menubar.rectangle", accessibilityDescription: "NotchDeck")
 
         let menu = NSMenu()
         menu.addItem(withTitle: "Open Notch", action: #selector(openNotch), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings(_:)), keyEquivalent: ",").target = self
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit NotchUtility", action: #selector(quit), keyEquivalent: "q").target = self
+        menu.addItem(withTitle: "Quit NotchDeck", action: #selector(quit), keyEquivalent: "q").target = self
         item.menu = menu
         statusItem = item
     }
@@ -74,7 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if settingsWindow == nil {
             let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()))
-            window.title = "NotchUtility Settings"
+            window.title = "NotchDeck Settings"
             window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
             // A toolbar gives the sidebar its full-height, unified look.
             window.toolbar = NSToolbar(identifier: "Settings")

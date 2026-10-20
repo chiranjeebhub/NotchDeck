@@ -309,7 +309,7 @@ final class NowPlayingService: NSObject, ObservableObject {
         var error: NSDictionary?
         let result = script.executeAndReturnError(&error)
         if let error {
-            NSLog("NotchUtility AppleScript error: \(error)")
+            NSLog("NotchDeck AppleScript error: \(error)")
             return nil
         }
         return result

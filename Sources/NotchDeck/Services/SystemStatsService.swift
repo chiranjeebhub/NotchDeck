@@ -243,7 +243,7 @@ final class SystemStatsService: ObservableObject {
         guard let docker = DockerCLI.path else { return }
         let script = "#!/bin/zsh\nexec '\(docker)' logs -f --tail 200 '\(container.id)'\n"
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("NotchUtility-logs-\(container.id).command")
+            .appendingPathComponent("NotchDeck-logs-\(container.id).command")
         do {
             try script.write(to: url, atomically: true, encoding: .utf8)
             try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)

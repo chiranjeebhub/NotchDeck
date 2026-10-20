@@ -2,12 +2,12 @@
 import PackageDescription
 
 let package = Package(
-    name: "NotchUtility",
+    name: "NotchDeck",
     platforms: [.macOS(.v14)],
     targets: [
         .executableTarget(
-            name: "NotchUtility",
-            path: "Sources/NotchUtility"
+            name: "NotchDeck",
+            path: "Sources/NotchDeck"
         ),
     ]
 )

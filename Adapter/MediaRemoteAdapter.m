@@ -169,7 +169,7 @@ void notch_adapter_stream(void *interpreter, void *cv) {
             fprintf(stderr, "MediaRemote unavailable\n");
             exit(1);
         }
-        queue = dispatch_queue_create("NotchUtility.MediaRemoteAdapter", DISPATCH_QUEUE_SERIAL);
+        queue = dispatch_queue_create("NotchDeck.MediaRemoteAdapter", DISPATCH_QUEUE_SERIAL);
 
         RegisterFn registerForNotifications = symbol("MRMediaRemoteRegisterForNowPlayingNotifications");
         if (registerForNotifications) registerForNotifications(dispatch_get_main_queue());

@@ -38,6 +38,19 @@ enum AppSettings {
     static let devShowUsageKey = "devShowUsage"
     static let devConfirmStopKey = "devConfirmStop"
 
+    /// The app was called NotchUtility before; carry its settings and tray over once.
+    static func migrateFromNotchUtility() {
+        let defaults = UserDefaults.standard
+        let marker = "migratedFromNotchUtility"
+        guard !defaults.bool(forKey: marker) else { return }
+        defaults.set(true, forKey: marker)
+        guard let old = UserDefaults(suiteName: "com.chiranjeebhub.NotchUtility")?
+            .persistentDomain(forName: "com.chiranjeebhub.NotchUtility") else { return }
+        for (key, value) in old where defaults.object(forKey: key) == nil {
+            defaults.set(value, forKey: key)
+        }
+    }
+
     static func registerDefaults() {
         UserDefaults.standard.register(defaults: [
             preferredPlayerKey: "auto",
@@ -239,5 +252,5 @@ enum HomeWidget: String, CaseIterable, Identifiable {
 }
 
 extension Notification.Name {
-    static let openSettings = Notification.Name("NotchUtility.openSettings")
+    static let openSettings = Notification.Name("NotchDeck.openSettings")
 }

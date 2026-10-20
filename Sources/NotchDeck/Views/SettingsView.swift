@@ -167,7 +167,7 @@ private struct GeneralSettings: View {
                         do {
                             if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
                         } catch {
-                            NSLog("NotchUtility: launch at login failed: \(error)")
+                            NSLog("NotchDeck: launch at login failed: \(error)")
                             launchAtLogin = SMAppService.mainApp.status == .enabled
                         }
                     }
@@ -577,7 +577,7 @@ private struct AboutSettings: View {
                         .resizable()
                         .frame(width: 64, height: 64)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("NotchUtility")
+                        Text("NotchDeck")
                             .font(.title2.weight(.semibold))
                         Text("Version \(version)")
                             .foregroundStyle(.secondary)

@@ -1,4 +1,4 @@
-# NotchUtility
+# NotchDeck
 
 An open-source clone of [NotchNook](https://getnotchnook.com/) for macOS: hover over the notch and it
 expands into a small hub with media controls, a file tray with AirDrop, and today's calendar.
@@ -28,12 +28,12 @@ See [docs/PLAN.md](docs/PLAN.md) for the full NotchNook feature comparison and r
 
 ```sh
 ./scripts/build-app.sh
-open build/NotchUtility.app
+open build/NotchDeck.app
 ```
 
 The app lives in the menu bar (no Dock icon). Use the menu bar icon to open Settings or quit.
 
-You can also open `Package.swift` in Xcode and run the `NotchUtility` scheme, but privacy prompts
+You can also open `Package.swift` in Xcode and run the `NotchDeck` scheme, but privacy prompts
 (Calendar, Automation) only work properly from the bundled `.app`.
 
 ### Permissions
@@ -46,7 +46,7 @@ The build is ad-hoc signed, so macOS may ask for permissions again after each re
 ## Project layout
 
 ```
-Sources/NotchUtility/
+Sources/NotchDeck/
   App/       entry point, app delegate, settings keys
   Notch/     panel, per-screen controller (hover/drag detection), geometry, view model
   Services/  now playing, tray store, calendar

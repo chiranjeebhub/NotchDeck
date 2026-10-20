@@ -1,6 +1,6 @@
 # Feature plan
 
-NotchUtility is an open-source take on [NotchNook](https://getnotchnook.com/): the MacBook notch
+NotchDeck is an open-source take on [NotchNook](https://getnotchnook.com/): the MacBook notch
 becomes an interactive "dynamic island" that expands on hover.
 
 ## NotchNook feature inventory
