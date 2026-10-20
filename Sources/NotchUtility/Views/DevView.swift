@@ -62,7 +62,8 @@ struct PortRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Text(":\(port.port)")
+            // String(_:) avoids the locale grouping Text applies to integers (":8,080").
+            Text(":" + String(port.port))
                 .font(.system(size: 13, weight: .bold, design: .monospaced))
                 .foregroundStyle(Color.green)
                 .frame(width: 64, alignment: .leading)
