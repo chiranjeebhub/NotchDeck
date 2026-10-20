@@ -126,10 +126,10 @@ final class SystemStatsService: ObservableObject {
         guard result == KERN_SUCCESS else { return }
         let page = UInt64(getpagesize())
         // Same breakdown as Activity Monitor's "Memory Used".
-        let internal = UInt64(stats.internal_page_count)
+        let internalPages = UInt64(stats.internal_page_count)
         let purgeable = UInt64(stats.purgeable_count)
         let next = MemoryUsage(
-            app: (internal > purgeable ? internal - purgeable : 0) * page,
+            app: (internalPages > purgeable ? internalPages - purgeable : 0) * page,
             wired: UInt64(stats.wire_count) * page,
             compressed: UInt64(stats.compressor_page_count) * page,
             total: ProcessInfo.processInfo.physicalMemory
