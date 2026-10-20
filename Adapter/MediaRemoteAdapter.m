@@ -52,6 +52,12 @@ static void finish(NSMutableDictionary *out) {
     });
 }
 
+static void emitEmpty(void) {
+    lastArtwork = nil;
+    sentArtwork = NO;
+    emit(@{ @"empty": @YES });
+}
+
 static void update(void) {
     GetInfoFn getInfo = symbol("MRMediaRemoteGetNowPlayingInfo");
     GetIsPlayingFn getIsPlaying = symbol("MRMediaRemoteGetNowPlayingApplicationIsPlaying");
@@ -59,10 +65,26 @@ static void update(void) {
 
     getInfo(queue, ^(NSDictionary *info) {
         NSString *title = info[@"kMRMediaRemoteNowPlayingInfoTitle"];
-        if (info.count == 0 || title.length == 0) {
-            lastArtwork = nil;
-            sentArtwork = NO;
-            emit(@{ @"empty": @YES });
+        if (title.length == 0) {
+            // Untitled media (e.g. a bare audio file in a browser): report it only while it
+            // plays, so the app can show the player's name instead of "Nothing playing".
+            if (!getIsPlaying) {
+                emitEmpty();
+                return;
+            }
+            getIsPlaying(queue, ^(Boolean playing) {
+                if (!playing) {
+                    emitEmpty();
+                    return;
+                }
+                NSMutableDictionary *out = [NSMutableDictionary dictionary];
+                out[@"title"] = @"";
+                out[@"playing"] = @YES;
+                out[@"duration"] = info[@"kMRMediaRemoteNowPlayingInfoDuration"] ?: @0;
+                out[@"elapsed"] = info[@"kMRMediaRemoteNowPlayingInfoElapsedTime"] ?: @0;
+                out[@"timestamp"] = @([NSDate date].timeIntervalSince1970);
+                finish(out);
+            });
             return;
         }
 

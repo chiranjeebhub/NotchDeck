@@ -109,7 +109,7 @@ final class NowPlayingService: NSObject, ObservableObject {
             artwork = nil
         } else {
             let timestamp = (update["timestamp"] as? Double).map(Date.init(timeIntervalSince1970:)) ?? .now
-            adapterState = NowPlaying(
+            var state = NowPlaying(
                 bundleIdentifier: update["bundleIdentifier"] as? String ?? "",
                 title: update["title"] as? String ?? "",
                 artist: update["artist"] as? String ?? "",
@@ -119,6 +119,9 @@ final class NowPlayingService: NSObject, ObservableObject {
                 positionDate: timestamp,
                 isPlaying: update["playing"] as? Bool ?? false
             )
+            // Untitled media: show the app that is playing it instead.
+            if state.title.isEmpty { state.title = state.appName }
+            adapterState = state
         }
         updateActivePlayer()
     }
