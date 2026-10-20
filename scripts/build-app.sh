@@ -33,7 +33,8 @@ done
 iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 
 # System-wide Now Playing helper, run under /usr/bin/perl (see Adapter/MediaRemoteAdapter.m).
-clang -dynamiclib -fobjc-arc -O2 -framework Foundation ${CLANG_ARCHS[@]+"${CLANG_ARCHS[@]}"} \
+# The deployment target must match the app's, or older macOS versions refuse to load it.
+clang -dynamiclib -fobjc-arc -O2 -mmacosx-version-min=14.0 -framework Foundation ${CLANG_ARCHS[@]+"${CLANG_ARCHS[@]}"} \
     -o "$APP/Contents/Resources/MediaRemoteAdapter.dylib" Adapter/MediaRemoteAdapter.m
 cp Adapter/MediaRemoteAdapter.pl "$APP/Contents/Resources/MediaRemoteAdapter.pl"
 codesign --force --sign - "$APP/Contents/Resources/MediaRemoteAdapter.dylib"
