@@ -23,7 +23,7 @@ if [[ -z "$IDENTITY" ]]; then
 fi
 echo "Signing with: $IDENTITY"
 
-scripts/build-app.sh
+UNIVERSAL=1 scripts/build-app.sh
 
 # Notarization needs every binary signed with the hardened runtime and a secure timestamp,
 # innermost first.
