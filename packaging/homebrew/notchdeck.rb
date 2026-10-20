@@ -2,7 +2,7 @@
 # After each release, update `version` and `sha256` (release.sh prints the checksum).
 cask "notchdeck" do
   version "0.1.0"
-  sha256 "REPLACE_WITH_DMG_SHA256"
+  sha256 "11a450ae658964cdffc6ce91f2c0ac6da47876960e6d388dd76b71c42d2b43b4"
 
   url "https://github.com/chiranjeebhub/NotchDeck/releases/download/v#{version}/NotchDeck-#{version}.dmg"
   name "NotchDeck"
@@ -15,7 +15,7 @@ cask "notchdeck" do
   end
 
   auto_updates true
-  depends_on macos: ">= :sonoma"
+  depends_on macos: :sonoma
 
   app "NotchDeck.app"
 
