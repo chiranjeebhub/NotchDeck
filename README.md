@@ -48,6 +48,6 @@ Sources/NotchUtility/
   Notch/     panel, per-screen controller (hover/drag detection), geometry, view model
   Services/  now playing, tray store, calendar
   Views/     SwiftUI views
-Resources/Info.plist
+Resources/       Info.plist, AppIcon.png (icon master, drawn by scripts/render-icon.py)
 scripts/build-app.sh
 ```
