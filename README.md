@@ -12,8 +12,9 @@ Works on Macs without a notch too: a slim handle at the top of the screen opens 
 - **Tray**: drag files onto the notch to stash them, drag them back out, Quick Look thumbnails,
   AirDrop from the tray.
 - **Calendar**: today's remaining events with one-click Join for Meet, Zoom, Teams and Webex.
-- **Dev**: local servers listening on TCP ports (e.g. `localhost:3000`) with their project folder,
-  and buttons to open them in the browser or kill them.
+- **Dev**: live CPU and memory, Docker containers (start / stop / logs), and local servers
+  listening on TCP ports (e.g. `localhost:3000`) with project folder, CPU and memory, plus Open,
+  Copy URL and Stop.
 - **Settings**: open on hover or click, hover delay, launch at login, show on all displays, haptics.
 
 See [docs/PLAN.md](docs/PLAN.md) for the full NotchNook feature comparison and roadmap.

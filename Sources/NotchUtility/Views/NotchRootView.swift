@@ -59,15 +59,8 @@ struct LiveActivityView: View {
 struct OpenNotchView: View {
     @ObservedObject var viewModel: NotchViewModel
     @ObservedObject private var tray = TrayStore.shared
-    @ObservedObject private var ports = PortsService.shared
-    @AppStorage(AppSettings.devShowAllPortsKey) private var showAllPorts = false
-
-    /// Rows that fit in the normal height; more than this and the Dev tab grows.
-    private static let devRowsBeforeGrowing = 3
-
-    private var wantsTall: Bool {
-        viewModel.tab == .dev && ports.visiblePorts(showAll: showAllPorts).count > Self.devRowsBeforeGrowing
-    }
+    /// The Dev tab always uses the tall layout: stats on top, a list below.
+    private var wantsTall: Bool { viewModel.tab == .dev }
 
     var body: some View {
         VStack(spacing: 0) {

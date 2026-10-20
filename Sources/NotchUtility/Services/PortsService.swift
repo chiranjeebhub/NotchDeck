@@ -8,12 +8,15 @@ struct ListeningPort: Identifiable, Hashable, Sendable {
     let address: String
     /// The process's working directory, which for dev servers is usually the project folder.
     var directory: String?
+    /// Process CPU in percent and resident memory in bytes, from `ps`.
+    var cpu: Double?
+    var memory: UInt64?
 
     var id: String { "\(pid):\(port)" }
 
     enum Kind { case web, database, other }
 
-    private static let databaseKeywords = [
+    static let databaseKeywords = [
         "postgres", "mysql", "maria", "mongo", "redis", "memcached", "clickhouse",
         "elastic", "opensearch", "rabbitmq", "kafka", "cockroach", "influx", "couchdb",
     ]
@@ -148,9 +151,14 @@ enum PortScanner {
             }
         }
 
-        let directories = workingDirectories(of: Set(ports.map(\.pid)))
+        let pids = Set(ports.map(\.pid))
+        let directories = workingDirectories(of: pids)
+        let usage = resourceUsage(of: pids)
         for index in ports.indices {
-            ports[index].directory = directories[ports[index].pid]
+            let pid = ports[index].pid
+            ports[index].directory = directories[pid]
+            ports[index].cpu = usage[pid]?.cpu
+            ports[index].memory = usage[pid]?.memory
         }
         return ports.sorted { ($0.port, $0.pid) < ($1.port, $1.pid) }
     }
@@ -170,9 +178,23 @@ enum PortScanner {
         return result
     }
 
-    private static func run(_ arguments: [String]) -> String? {
+    private static func resourceUsage(of pids: Set<Int32>) -> [Int32: (cpu: Double, memory: UInt64)] {
+        guard !pids.isEmpty,
+              let output = run(["-o", "pid=,%cpu=,rss=", "-p", pids.map(String.init).joined(separator: ",")],
+                               executable: "/bin/ps") else { return [:] }
+        var result: [Int32: (cpu: Double, memory: UInt64)] = [:]
+        for line in output.split(separator: "\n") {
+            let fields = line.split(separator: " ", omittingEmptySubsequences: true)
+            guard fields.count == 3, let pid = Int32(fields[0]), let cpu = Double(fields[1]),
+                  let rssKB = UInt64(fields[2]) else { continue }
+            result[pid] = (cpu, rssKB * 1024)
+        }
+        return result
+    }
+
+    private static func run(_ arguments: [String], executable: String = "/usr/sbin/lsof") -> String? {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+        process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
         let pipe = Pipe()
         process.standardOutput = pipe
