@@ -37,6 +37,14 @@ struct CalendarWidgetView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .task {
+            // Right after launch (or a rebuild) macOS can report "not determined" for a moment
+            // before the real status, so check again shortly instead of showing the Allow button.
+            calendar.reload()
+            guard !calendar.hasAccess else { return }
+            try? await Task.sleep(for: .seconds(1))
+            calendar.reload()
+        }
     }
 
     private var header: some View {
