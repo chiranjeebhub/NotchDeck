@@ -53,11 +53,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.button?.image = NSImage(systemSymbolName: "menubar.rectangle", accessibilityDescription: "NotchUtility")
 
         let menu = NSMenu()
+        menu.addItem(withTitle: "Open Notch", action: #selector(openNotch), keyEquivalent: "").target = self
         menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit NotchUtility", action: #selector(quit), keyEquivalent: "q").target = self
         item.menu = menu
         statusItem = item
+    }
+
+    @objc private func openNotch() {
+        let screen = NotchGeometry.preferredScreen()
+        (controllers.first { $0.screen == screen } ?? controllers.first)?.showFromMenu()
     }
 
     @objc private func openSettings() {

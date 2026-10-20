@@ -5,21 +5,26 @@ import SwiftUI
 /// Owns the notch panel for one screen and decides when it opens and closes.
 ///
 /// The panel is always as large as the open notch but ignores the mouse while closed, so it
-/// never blocks the menu bar. Hover and file drags are detected with event monitors instead.
+/// never blocks the menu bar. Hover and file drags are detected by polling the cursor instead.
 @MainActor
 final class NotchWindowController {
-    private let screen: NSScreen
+    let screen: NSScreen
     private let panel: NotchPanel
     let viewModel: NotchViewModel
 
-    private var monitors: [Any] = []
     private var pendingAction: NotchViewModel.Status?
     private var pendingTask: Task<Void, Never>?
-    private var pollTask: Task<Void, Never>?
+    private var trackingTask: Task<Void, Never>?
+    private var wasMouseDown = false
     private var dragChangeCount = NSPasteboard(name: .drag).changeCount
     private var isDraggingFile = false
+    /// Set when opened from the menu, so the notch stays open until the cursor has visited it.
+    private var staysOpenUntilHovered = false
 
     private static let shadowPadding: CGFloat = 24
+    /// The cursor's y equals the screen's maxY when pushed against the top edge, and
+    /// `CGRect.contains` excludes the max edge, so hit rects extend slightly past it.
+    private static let topEdgeSlop: CGFloat = 4
     private static let hoverOpenDelay: Duration = .milliseconds(120)
     private static let closeDelay: Duration = .milliseconds(300)
 
@@ -35,14 +40,12 @@ final class NotchWindowController {
         panel.ignoresMouseEvents = true
         panel.orderFrontRegardless()
 
-        installMonitors()
+        startTracking()
     }
 
     func tearDown() {
-        monitors.forEach { NSEvent.removeMonitor($0) }
-        monitors.removeAll()
         pendingTask?.cancel()
-        pollTask?.cancel()
+        trackingTask?.cancel()
         panel.orderOut(nil)
         panel.close()
     }
@@ -55,6 +58,7 @@ final class NotchWindowController {
         let ear = viewModel.earRadius(isOpen: false)
         let height = viewModel.hasNotch ? size.height : NotchGeometry.menuBarHeight(for: screen)
         return NotchGeometry.topCenteredRect(width: size.width + ear * 2 + 16, height: height + 2, on: screen)
+            .insetBy(dx: 0, dy: -Self.topEdgeSlop)
     }
 
     private var openHitRect: CGRect {
@@ -66,41 +70,33 @@ final class NotchWindowController {
 
     // MARK: - Mouse tracking
 
-    private func installMonitors() {
-        let mask: NSEvent.EventTypeMask = [.mouseMoved, .leftMouseDown, .leftMouseDragged, .leftMouseUp]
-        if let global = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { [weak self] event in
-            let type = event.type
-            MainActor.assumeIsolated { self?.handle(type) }
-        }) {
-            monitors.append(global)
-        }
-        if let local = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { [weak self] event in
-            let type = event.type
-            MainActor.assumeIsolated { self?.handle(type) }
-            return event
-        }) {
-            monitors.append(local)
+    /// Polls the cursor and mouse button instead of relying on event monitors: global
+    /// mouse-moved events are not delivered reliably (for example while the cursor rests
+    /// against the top edge, or during drags from other apps).
+    private func startTracking() {
+        trackingTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                self.tick()
+                try? await Task.sleep(for: .milliseconds(50))
+            }
         }
     }
 
-    private func handle(_ type: NSEvent.EventType) {
-        switch type {
-        case .leftMouseDown:
-            dragChangeCount = NSPasteboard(name: .drag).changeCount
-            isDraggingFile = false
-        case .leftMouseDragged:
-            if !isDraggingFile {
-                let pasteboard = NSPasteboard(name: .drag)
-                if pasteboard.changeCount != dragChangeCount,
-                   pasteboard.types?.contains(.fileURL) == true {
-                    isDraggingFile = true
-                }
-            }
-        case .leftMouseUp:
-            isDraggingFile = false
-        default:
-            break
+    private func tick() {
+        let isMouseDown = NSEvent.pressedMouseButtons & 1 != 0
+        let pasteboard = NSPasteboard(name: .drag)
+        if isMouseDown && !wasMouseDown {
+            dragChangeCount = pasteboard.changeCount
         }
+        if !isMouseDown {
+            isDraggingFile = false
+        } else if !isDraggingFile,
+                  pasteboard.changeCount != dragChangeCount,
+                  pasteboard.types?.contains(.fileURL) == true {
+            isDraggingFile = true
+        }
+        wasMouseDown = isMouseDown
         evaluate(NSEvent.mouseLocation)
     }
 
@@ -114,8 +110,9 @@ final class NotchWindowController {
             }
         case .open:
             if openHitRect.contains(location) || viewModel.isDropTargeted {
+                staysOpenUntilHovered = false
                 if pendingAction == .closed { cancelPending() }
-            } else {
+            } else if !staysOpenUntilHovered {
                 schedule(.closed, after: Self.closeDelay)
             }
         }
@@ -141,6 +138,13 @@ final class NotchWindowController {
 
     // MARK: - Open / close
 
+    /// Opens the notch from the menu bar item. It stays open until the cursor has visited it and left.
+    func showFromMenu() {
+        cancelPending()
+        open()
+        staysOpenUntilHovered = true
+    }
+
     private func open() {
         guard viewModel.status == .closed else { return }
         if isDraggingFile { viewModel.tab = .tray }
@@ -151,22 +155,11 @@ final class NotchWindowController {
         }
         NowPlayingService.shared.refreshAll()
         CalendarService.shared.reload()
-
-        // Mouse-moved events stop arriving in some states (e.g. over our own non-key panel),
-        // so poll the cursor while open to make sure we close reliably.
-        pollTask?.cancel()
-        pollTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .milliseconds(150))
-                guard let self, self.viewModel.status == .open else { return }
-                self.evaluate(NSEvent.mouseLocation)
-            }
-        }
     }
 
     private func close() {
         guard viewModel.status == .open else { return }
-        pollTask?.cancel()
+        staysOpenUntilHovered = false
         viewModel.status = .closed
         viewModel.isDropTargeted = false
         panel.ignoresMouseEvents = true
