@@ -16,7 +16,9 @@
   <a href="LICENSE"><img src="https://img.shields.io/github/license/chiranjeebhub/NotchDeck" alt="MIT license"></a>
 </p>
 
-<!-- screenshots -->
+<p align="center">
+  <img src="docs/screenshots/home.png" alt="NotchDeck Home tab: Now Playing next to the calendar" width="780">
+</p>
 
 ## What it does
 
@@ -40,6 +42,20 @@ and it tucks back in. Macs without a notch get a slim handle at the top of the s
   either side of Home, pick the three Dev stats, reorder the Dev lists, choose which calendars to
   show, and set hover or click to open.
 - **Updates itself** through [Sparkle](https://sparkle-project.org).
+
+## Screenshots
+
+| Calendar month view | Tray |
+|---|---|
+| <img src="docs/screenshots/calendar-month.png" alt="Calendar month view"> | <img src="docs/screenshots/tray.png" alt="File tray with AirDrop"> |
+
+**Dev tab:** system stats and the local servers running on your Mac.
+
+<img src="docs/screenshots/dev.png" alt="Dev tab with CPU, memory, disk and local servers" width="780">
+
+**Settings:** pick what each tab shows.
+
+<img src="docs/screenshots/settings.png" alt="Settings window, Dev page" width="640">
 
 ## Install
 
