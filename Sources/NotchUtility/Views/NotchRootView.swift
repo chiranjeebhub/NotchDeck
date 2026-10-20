@@ -22,7 +22,7 @@ struct NotchRootView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .animation(.spring(response: 0.38, dampingFraction: 0.8), value: isOpen)
             .animation(.spring(response: 0.38, dampingFraction: 0.8), value: showsLive)
-            .animation(.spring(response: 0.38, dampingFraction: 0.85), value: viewModel.isTall)
+            .animation(.spring(response: 0.38, dampingFraction: 0.85), value: viewModel.openSize.height)
             .preferredColorScheme(.dark)
     }
 
@@ -59,8 +59,8 @@ struct LiveActivityView: View {
 struct OpenNotchView: View {
     @ObservedObject var viewModel: NotchViewModel
     @ObservedObject private var tray = TrayStore.shared
-    /// The Dev tab always uses the tall layout: stats on top, a list below.
-    private var wantsTall: Bool { viewModel.tab == .dev }
+    private static let contentTopPadding: CGFloat = 8
+    private static let contentBottomPadding: CGFloat = 16
 
     var body: some View {
         VStack(spacing: 0) {
@@ -70,13 +70,17 @@ struct OpenNotchView: View {
                 switch viewModel.tab {
                 case .home: HomeView()
                 case .tray: TrayView(isDropTargeted: viewModel.isDropTargeted)
-                case .dev: DevView()
+                case .dev:
+                    DevView { contentHeight in
+                        let height = viewModel.headerHeight + Self.contentTopPadding + contentHeight + Self.contentBottomPadding
+                        if abs((viewModel.preferredHeight ?? 0) - height) > 1 { viewModel.preferredHeight = height }
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .padding(.horizontal, 18)
-            .padding(.top, 8)
-            .padding(.bottom, 16)
+            .padding(.top, Self.contentTopPadding)
+            .padding(.bottom, Self.contentBottomPadding)
         }
         .foregroundStyle(Color.white)
         .onDrop(of: [UTType.fileURL], isTargeted: $viewModel.isDropTargeted) { providers in
@@ -86,10 +90,10 @@ struct OpenNotchView: View {
         .onChange(of: viewModel.isDropTargeted) { _, targeted in
             if targeted { viewModel.tab = .tray }
         }
-        .onChange(of: wantsTall, initial: true) { _, tall in
-            viewModel.isTall = tall
+        .onChange(of: viewModel.tab) { _, tab in
+            if tab != .dev { viewModel.preferredHeight = nil }
         }
-        .onDisappear { viewModel.isTall = false }
+        .onDisappear { viewModel.preferredHeight = nil }
     }
 
     private static let headerPadding: CGFloat = 16

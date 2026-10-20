@@ -43,7 +43,7 @@ enum DockerState: Equatable {
     }
 }
 
-/// CPU, memory and Docker status for the Dev tab. Only samples while the tab is visible.
+/// CPU, memory and Docker status for the Dev tab.
 @MainActor
 final class SystemStatsService: ObservableObject {
     static let shared = SystemStatsService()
@@ -57,7 +57,7 @@ final class SystemStatsService: ObservableObject {
     let coreCount = ProcessInfo.processInfo.activeProcessorCount
 
     private var previousTicks: [UInt32]?
-    private var monitorTask: Task<Void, Never>?
+    private var samplingTask: Task<Void, Never>?
     private var watchers = 0
     private var isRefreshingDocker = false
 
@@ -66,28 +66,34 @@ final class SystemStatsService: ObservableObject {
     /// Docker is slower to query, so it refreshes every few CPU samples.
     private static let dockerEvery = 3
 
-    func startMonitoring() {
-        watchers += 1
-        guard monitorTask == nil else { return }
-        monitorTask = Task { [weak self] in
+    /// CPU and memory are sampled all the time (it is cheap), so the CPU graph already has a
+    /// minute of history when the Dev tab opens. Docker is only queried while the tab is visible.
+    func startSampling() {
+        guard samplingTask == nil else { return }
+        samplingTask = Task { [weak self] in
             var tick = 0
             while !Task.isCancelled {
                 guard let self else { return }
                 self.sampleCPU()
-                self.sampleMemory()
-                if tick % Self.dockerEvery == 0 { self.refreshDocker() }
-                tick += 1
+                if self.watchers > 0 {
+                    self.sampleMemory()
+                    if tick % Self.dockerEvery == 0 { self.refreshDocker() }
+                    tick += 1
+                }
                 try? await Task.sleep(for: Self.sampleInterval)
             }
         }
     }
 
+    func startMonitoring() {
+        watchers += 1
+        guard watchers == 1 else { return }
+        sampleMemory()
+        refreshDocker()
+    }
+
     func stopMonitoring() {
         watchers = max(0, watchers - 1)
-        guard watchers == 0 else { return }
-        monitorTask?.cancel()
-        monitorTask = nil
-        previousTicks = nil
     }
 
     // MARK: - CPU and memory

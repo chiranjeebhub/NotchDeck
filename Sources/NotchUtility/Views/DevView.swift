@@ -9,6 +9,18 @@ struct DevView: View {
     @AppStorage(AppSettings.devShowAllPortsKey) private var showAll = false
     @AppStorage("devSection") private var section = DevSection.servers
     @AppStorage("devShowAllContainers") private var showAllContainers = false
+    /// Reports the height the tab needs, so the notch can shrink to fit a short list.
+    private let onContentHeightChange: (CGFloat) -> Void
+    @State private var topHeight: CGFloat = 0
+    @State private var listHeight: CGFloat = 0
+
+    private static let spacing: CGFloat = 10
+    /// Height given to the "No local servers" message.
+    private static let emptyListHeight: CGFloat = 90
+
+    init(onContentHeightChange: @escaping (CGFloat) -> Void = { _ in }) {
+        self.onContentHeightChange = onContentHeightChange
+    }
 
     private var ports: [ListeningPort] { service.visiblePorts(showAll: showAll) }
     private var dockerAvailable: Bool {
@@ -22,42 +34,56 @@ struct DevView: View {
     private var activeSection: DevSection { dockerAvailable ? section : .servers }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            StatsStripView()
+        VStack(alignment: .leading, spacing: Self.spacing) {
+            // Stats and the list switcher; measured to work out how tall the tab needs to be.
+            VStack(alignment: .leading, spacing: Self.spacing) {
+                StatsStripView()
 
-            HStack(spacing: 8) {
-                SegmentedToggle(
-                    options: dockerAvailable
-                        ? ["Servers  \(ports.count)", "Containers  \(stats.docker.containers.count)"]
-                        : ["Servers  \(ports.count)"],
-                    selection: Binding(
-                        get: { activeSection == .servers ? 0 : 1 },
-                        set: { section = $0 == 0 ? .servers : .containers }
+                HStack(spacing: 8) {
+                    SegmentedToggle(
+                        options: dockerAvailable
+                            ? ["Servers  \(ports.count)", "Containers  \(stats.docker.containers.count)"]
+                            : ["Servers  \(ports.count)"],
+                        selection: Binding(
+                            get: { activeSection == .servers ? 0 : 1 },
+                            set: { section = $0 == 0 ? .servers : .containers }
+                        )
                     )
-                )
-                Spacer()
-                if activeSection == .servers {
-                    SegmentedToggle(options: ["Dev", "All ports"], selection: Binding(
-                        get: { showAll ? 1 : 0 },
-                        set: { showAll = $0 == 1 }
-                    ))
-                } else {
-                    SegmentedToggle(options: ["Running", "All"], selection: Binding(
-                        get: { showAllContainers ? 1 : 0 },
-                        set: { showAllContainers = $0 == 1 }
-                    ))
-                }
-                RowIconButton(systemImage: "arrow.clockwise", help: "Refresh") {
-                    Task { await service.refresh() }
-                    stats.refreshDocker()
+                    Spacer()
+                    if activeSection == .servers {
+                        SegmentedToggle(options: ["Dev", "All ports"], selection: Binding(
+                            get: { showAll ? 1 : 0 },
+                            set: { showAll = $0 == 1 }
+                        ))
+                    } else {
+                        SegmentedToggle(options: ["Running", "All"], selection: Binding(
+                            get: { showAllContainers ? 1 : 0 },
+                            set: { showAllContainers = $0 == 1 }
+                        ))
+                    }
+                    RowIconButton(systemImage: "arrow.clockwise", help: "Refresh") {
+                        Task { await service.refresh() }
+                        stats.refreshDocker()
+                    }
                 }
             }
+            .background(HeightReader(height: $topHeight))
 
-            if activeSection == .servers {
-                serverList
-            } else {
-                containerList
+            Group {
+                if activeSection == .servers {
+                    serverList
+                } else {
+                    containerList
+                }
             }
+            // Never taller than the rows, so a short list leaves no empty space.
+            .frame(maxHeight: listHeight, alignment: .top)
+
+            Spacer(minLength: 0)
+        }
+        .onChange(of: topHeight + listHeight, initial: true) { _, _ in
+            guard topHeight > 0 else { return }
+            onContentHeightChange(topHeight + Self.spacing + listHeight)
         }
         .onAppear {
             service.startMonitoring()
@@ -74,6 +100,7 @@ struct DevView: View {
         if ports.isEmpty {
             EmptyListView(systemImage: "network.slash",
                           text: service.hasLoaded ? "No local servers running" : "Looking for local servers…")
+                .onAppear { listHeight = Self.emptyListHeight }
         } else {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
@@ -81,6 +108,7 @@ struct DevView: View {
                         PortRow(port: port, showsDivider: index > 0)
                     }
                 }
+                .background(HeightReader(height: $listHeight))
             }
         }
     }
@@ -90,6 +118,7 @@ struct DevView: View {
         if containers.isEmpty {
             EmptyListView(systemImage: "shippingbox",
                           text: showAllContainers ? "No containers" : "No running containers")
+                .onAppear { listHeight = Self.emptyListHeight }
         } else {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 0) {
@@ -97,7 +126,21 @@ struct DevView: View {
                         ContainerRow(container: container, showsDivider: index > 0)
                     }
                 }
+                .background(HeightReader(height: $listHeight))
             }
+        }
+    }
+}
+
+/// Writes the height of the view it is the background of into `height`.
+struct HeightReader: View {
+    @Binding var height: CGFloat
+
+    var body: some View {
+        GeometryReader { geometry in
+            Color.clear
+                .onAppear { height = geometry.size.height }
+                .onChange(of: geometry.size.height) { _, newHeight in height = newHeight }
         }
     }
 }

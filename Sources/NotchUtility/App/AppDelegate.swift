@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setUpStatusItem()
         NowPlayingService.shared.start()
         CalendarService.shared.start()
+        SystemStatsService.shared.startSampling()
         rebuildNotches()
 
         let center = NotificationCenter.default

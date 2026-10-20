@@ -29,8 +29,8 @@ final class NotchViewModel: ObservableObject {
     @Published var status: Status = .closed
     @Published var tab: Tab = .home
     @Published var isDropTargeted = false
-    /// The Dev tab doubles the panel's height when it has many servers to show.
-    @Published var isTall = false
+    /// Height the current tab asks for (the Dev tab grows with its list), or nil for the default.
+    @Published var preferredHeight: CGFloat?
 
     let hasNotch: Bool
     /// Physical notch size, or the handle size on screens without a notch.
@@ -40,7 +40,10 @@ final class NotchViewModel: ObservableObject {
     static let tallOpenHeight: CGFloat = 430
 
     /// Size of the expanded content area (without the concave "ears").
-    var openSize: CGSize { CGSize(width: Self.openWidth, height: isTall ? Self.tallOpenHeight : Self.openHeight) }
+    var openSize: CGSize {
+        let height = preferredHeight.map { min(max($0, Self.openHeight), Self.tallOpenHeight) } ?? Self.openHeight
+        return CGSize(width: Self.openWidth, height: height)
+    }
     /// The largest the open notch can get, which sizes its window.
     var maxOpenSize: CGSize { CGSize(width: Self.openWidth, height: Self.tallOpenHeight) }
 

@@ -9,7 +9,7 @@ struct StatsStripView: View {
             StatColumn(label: "CPU", detail: "\(stats.coreCount) cores") {
                 BigValue(value: String(format: "%.0f", stats.cpuUsage), unit: "%")
                 Sparkline(values: stats.cpuHistory)
-                    .frame(height: 20)
+                    .frame(height: 24)
                     .padding(.top, 2)
             }
             .padding(.leading, 4)
@@ -156,11 +156,18 @@ struct Sparkline: View {
         }
     }
 
+    /// The vertical scale follows the recent range, so small changes stay visible
+    /// (a fixed 0–100% scale draws 18–25% as a flat line along the bottom).
     private static func points(_ values: [Double], in size: CGSize) -> [CGPoint] {
-        guard values.count > 1 else { return [] }
+        guard values.count > 1, let low = values.min(), let high = values.max() else { return [] }
+        let padding = max((high - low) * 0.25, 2)
+        let bottom = max(low - padding, 0)
+        let top = min(max(high + padding, bottom + 10), 100)
+        let span = max(top - bottom, 1)
         let step = size.width / CGFloat(values.count - 1)
         return values.enumerated().map { index, value in
-            CGPoint(x: CGFloat(index) * step, y: size.height * (1 - CGFloat(min(max(value, 0), 100)) / 100))
+            let fraction = (min(max(value, bottom), top) - bottom) / span
+            return CGPoint(x: CGFloat(index) * step, y: size.height * (1 - CGFloat(fraction)))
         }
     }
 }
