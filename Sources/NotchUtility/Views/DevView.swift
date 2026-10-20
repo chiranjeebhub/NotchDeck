@@ -59,6 +59,8 @@ struct DevView: View {
 struct PortRow: View {
     let port: ListeningPort
     @State private var isHovering = false
+    /// Kill takes two clicks, so a list that shifts while refreshing can't cause a wrong kill.
+    @State private var isConfirmingKill = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -95,16 +97,25 @@ struct PortRow: View {
             .help("Open \(port.url.absoluteString)")
 
             Button {
-                PortsService.shared.kill(port)
+                if isConfirmingKill {
+                    PortsService.shared.kill(port)
+                } else {
+                    isConfirmingKill = true
+                }
             } label: {
-                Label("Kill", systemImage: "xmark.octagon.fill")
+                Label(isConfirmingKill ? "Confirm" : "Kill", systemImage: "xmark.octagon.fill")
                     .font(.system(size: 10, weight: .semibold))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
-                    .background(Capsule().fill(Color.red.opacity(0.85)))
+                    .background(Capsule().fill(Color.red.opacity(isConfirmingKill ? 1 : 0.6)))
             }
             .buttonStyle(.plain)
             .help("Quit \(port.command) (pid \(port.pid))")
+            .task(id: isConfirmingKill) {
+                guard isConfirmingKill else { return }
+                try? await Task.sleep(for: .seconds(3))
+                isConfirmingKill = false
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
