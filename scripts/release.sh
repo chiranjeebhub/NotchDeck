@@ -32,6 +32,16 @@ codesign --force --timestamp --options runtime --sign "$IDENTITY" \
 codesign --force --timestamp --options runtime --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$APP"
 codesign --verify --deep --strict --verbose=2 "$APP"
 
+# Notarize and staple the app itself too, so it opens without a network check even after
+# it has been copied out of the disk image.
+if [[ "${SKIP_NOTARIZE:-0}" != "1" ]]; then
+    ZIP="build/NotchDeck-notarize.zip"
+    ditto -c -k --keepParent "$APP" "$ZIP"
+    xcrun notarytool submit "$ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
+    xcrun stapler staple "$APP"
+    rm -f "$ZIP"
+fi
+
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
 DMG="build/NotchDeck-$VERSION.dmg"
 STAGING="build/dmg"
@@ -53,5 +63,6 @@ fi
 xcrun notarytool submit "$DMG" --keychain-profile "$NOTARY_PROFILE" --wait
 xcrun stapler staple "$DMG"
 spctl --assess --type open --context context:primary-signature --verbose "$DMG"
+xcrun stapler validate "$APP"
 
 echo "Notarized: $DMG"
