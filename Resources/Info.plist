@@ -31,7 +31,7 @@
 	<key>SUFeedURL</key>
 	<string>https://github.com/chiranjeebhub/NotchDeck/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string></string>
+	<string>WcMaK8VOTpKw9BBdKl6N6HkQ6JJN1O5Oh0QDlN99EfA=</string>
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
