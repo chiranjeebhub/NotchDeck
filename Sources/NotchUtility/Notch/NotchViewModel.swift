@@ -7,10 +7,23 @@ final class NotchViewModel: ObservableObject {
     enum Status { case closed, open }
 
     enum Tab: String, CaseIterable {
-        case nook, tray
+        case nook, tray, dev
 
-        var title: String { self == .nook ? "Nook" : "Tray" }
-        var systemImage: String { self == .nook ? "rectangle.3.group" : "tray" }
+        var title: String {
+            switch self {
+            case .nook: "Nook"
+            case .tray: "Tray"
+            case .dev: "Dev"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .nook: "rectangle.3.group"
+            case .tray: "tray"
+            case .dev: "terminal"
+            }
+        }
     }
 
     @Published var status: Status = .closed
@@ -21,7 +34,7 @@ final class NotchViewModel: ObservableObject {
     /// Physical notch size, or the handle size on screens without a notch.
     let notchSize: CGSize
     /// Size of the expanded content area (without the concave "ears").
-    let openSize = CGSize(width: 640, height: 230)
+    let openSize = CGSize(width: 700, height: 230)
 
     init(screen: NSScreen) {
         hasNotch = NotchGeometry.hasNotch(screen)

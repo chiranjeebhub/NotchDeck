@@ -16,6 +16,9 @@ final class NotchWindowController {
     private var pendingTask: Task<Void, Never>?
     private var trackingTask: Task<Void, Never>?
     private var wasMouseDown = false
+    /// Set by the click monitor, so quick clicks between two polls are not missed.
+    private var clickedSinceLastTick = false
+    private var clickMonitor: Any?
     private var dragChangeCount = NSPasteboard(name: .drag).changeCount
     private var isDraggingFile = false
     /// Set when opened from the menu, so the notch stays open until the cursor has visited it.
@@ -25,7 +28,6 @@ final class NotchWindowController {
     /// The cursor's y equals the screen's maxY when pushed against the top edge, and
     /// `CGRect.contains` excludes the max edge, so hit rects extend slightly past it.
     private static let topEdgeSlop: CGFloat = 4
-    private static let hoverOpenDelay: Duration = .milliseconds(120)
     private static let closeDelay: Duration = .milliseconds(300)
 
     init(screen: NSScreen) {
@@ -44,6 +46,7 @@ final class NotchWindowController {
     }
 
     func tearDown() {
+        if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
         pendingTask?.cancel()
         trackingTask?.cancel()
         panel.orderOut(nil)
@@ -74,6 +77,9 @@ final class NotchWindowController {
     /// mouse-moved events are not delivered reliably (for example while the cursor rests
     /// against the top edge, or during drags from other apps).
     private func startTracking() {
+        clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
+            MainActor.assumeIsolated { self?.clickedSinceLastTick = true }
+        }
         trackingTask = Task { [weak self] in
             while !Task.isCancelled {
                 guard let self else { return }
@@ -85,6 +91,8 @@ final class NotchWindowController {
 
     private func tick() {
         let isMouseDown = NSEvent.pressedMouseButtons & 1 != 0
+        let clicked = clickedSinceLastTick || (isMouseDown && !wasMouseDown)
+        clickedSinceLastTick = false
         let pasteboard = NSPasteboard(name: .drag)
         if isMouseDown && !wasMouseDown {
             dragChangeCount = pasteboard.changeCount
@@ -97,14 +105,20 @@ final class NotchWindowController {
             isDraggingFile = true
         }
         wasMouseDown = isMouseDown
-        evaluate(NSEvent.mouseLocation)
+        evaluate(NSEvent.mouseLocation, clicked: clicked)
     }
 
-    private func evaluate(_ location: NSPoint) {
+    private func evaluate(_ location: NSPoint, clicked: Bool) {
         switch viewModel.status {
         case .closed:
             if closedHitRect.contains(location) {
-                schedule(.open, after: isDraggingFile ? .zero : Self.hoverOpenDelay)
+                if isDraggingFile {
+                    schedule(.open, after: .zero)
+                } else if AppSettings.openOnClick {
+                    if clicked { schedule(.open, after: .zero) }
+                } else {
+                    schedule(.open, after: .milliseconds(Int(AppSettings.hoverDelay * 1000)))
+                }
             } else if pendingAction == .open {
                 cancelPending()
             }

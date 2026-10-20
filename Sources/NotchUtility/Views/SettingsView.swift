@@ -5,6 +5,8 @@ struct SettingsView: View {
     @AppStorage(AppSettings.preferredPlayerKey) private var preferredPlayer = "auto"
     @AppStorage(AppSettings.showOnAllDisplaysKey) private var showOnAllDisplays = true
     @AppStorage(AppSettings.hapticFeedbackKey) private var hapticFeedback = true
+    @AppStorage(AppSettings.openOnClickKey) private var openOnClick = false
+    @AppStorage(AppSettings.hoverDelayKey) private var hoverDelay = 0.15
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -23,14 +25,37 @@ struct SettingsView: View {
                 Toggle("Haptic feedback when opening", isOn: $hapticFeedback)
             }
 
+            Section("Opening") {
+                Picker("Open the notch", selection: $openOnClick) {
+                    Text("On hover").tag(false)
+                    Text("On click").tag(true)
+                }
+                .pickerStyle(.segmented)
+                if !openOnClick {
+                    LabeledContent("Hover delay") {
+                        HStack {
+                            Slider(value: $hoverDelay, in: 0...1, step: 0.05)
+                                .frame(width: 160)
+                            Text(hoverDelay, format: .number.precision(.fractionLength(2)))
+                                .monospacedDigit()
+                                .frame(width: 34, alignment: .trailing)
+                            Text("s")
+                        }
+                    }
+                }
+                Text("Dragging a file onto the notch always opens it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Media") {
-                Picker("Follow player", selection: $preferredPlayer) {
+                Picker("Fallback player", selection: $preferredPlayer) {
                     Text("Automatic").tag("auto")
                     ForEach(MediaPlayer.allCases) { player in
                         Text(player.displayName).tag(player.rawValue)
                     }
                 }
-                Text("Automatic follows whichever app started playing most recently.")
+                Text("The notch follows whatever macOS shows as Now Playing, including browsers and Podcasts. If that isn't available, it falls back to Spotify and Apple Music: Automatic follows whichever started playing most recently.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

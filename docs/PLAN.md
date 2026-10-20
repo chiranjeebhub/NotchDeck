@@ -34,8 +34,10 @@ Requirements to match: macOS 14+, Apple silicon and Intel, notch optional.
 
 ## Phase 2
 
-- [ ] System-wide Now Playing for any app (MediaRemote, or the `mediaremote-adapter`
-      approach needed on macOS 15.4+)
+- [x] System-wide Now Playing for any app (MediaRemote via a helper loaded into
+      /usr/bin/perl, the approach needed on macOS 15.4+), with Spotify/Music fallback
+- [x] Open on click option and hover delay setting
+- [x] Dev tab: listening ports / local dev servers with Open and Kill
 - [ ] Notes, To-dos and Timers widgets
 - [ ] Mirror (camera preview)
 - [ ] Shortcuts list and runner
@@ -45,5 +47,5 @@ Requirements to match: macOS 14+, Apple silicon and Intel, notch optional.
 
 - [ ] Volume / brightness HUD replacement
 - [ ] Bluetooth device connected notifications with battery level
-- [ ] Customisable widget layout, open-on-click option, hover delay setting
+- [ ] Customisable widget layout
 - [ ] Signed + notarised release builds, Sparkle auto-updates

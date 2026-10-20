@@ -9,7 +9,7 @@ struct MediaPlayerView: View {
                 ArtworkView(image: media.artwork, cornerRadius: 12)
                     .frame(width: 104, height: 104)
                     .onTapGesture { media.openActivePlayer() }
-                    .help("Open \(nowPlaying.player.displayName)")
+                    .help("Open \(nowPlaying.appName)")
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(nowPlaying.title)

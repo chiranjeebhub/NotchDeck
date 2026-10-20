@@ -7,12 +7,14 @@ Works on Macs without a notch too: a slim handle at the top of the screen opens 
 
 ## Features
 
-- **Media**: controls Spotify and Apple Music, with artwork, progress/seek and a live activity in the
-  closed notch while music plays.
+- **Media**: shows and controls whatever macOS lists as Now Playing (Spotify, Music, Podcasts,
+  YouTube in a browser, …), with artwork, progress/seek and a live activity in the closed notch.
 - **Tray**: drag files onto the notch to stash them, drag them back out, Quick Look thumbnails,
   AirDrop from the tray.
 - **Calendar**: today's remaining events with one-click Join for Meet, Zoom, Teams and Webex.
-- **Settings**: launch at login, show on all displays, haptics, which player to follow.
+- **Dev**: local servers listening on TCP ports (e.g. `localhost:3000`) with their project folder,
+  and buttons to open them in the browser or kill them.
+- **Settings**: open on hover or click, hover delay, launch at login, show on all displays, haptics.
 
 See [docs/PLAN.md](docs/PLAN.md) for the full NotchNook feature comparison and roadmap.
 
@@ -35,7 +37,7 @@ You can also open `Package.swift` in Xcode and run the `NotchUtility` scheme, bu
 
 ### Permissions
 
-- **Automation**: asked the first time NotchUtility talks to Spotify or Music.
+- **Automation**: only needed for the Spotify/Music fallback, used if system Now Playing is unavailable.
 - **Calendar**: asked when you click "Allow Calendar Access" in the notch.
 
 The build is ad-hoc signed, so macOS may ask for permissions again after each rebuild.
@@ -48,6 +50,7 @@ Sources/NotchUtility/
   Notch/     panel, per-screen controller (hover/drag detection), geometry, view model
   Services/  now playing, tray store, calendar
   Views/     SwiftUI views
+Adapter/         MediaRemote helper run under /usr/bin/perl for system-wide Now Playing
 Resources/       Info.plist, AppIcon.png (icon master, drawn by scripts/render-icon.py)
 scripts/build-app.sh
 ```

@@ -67,6 +67,7 @@ struct OpenNotchView: View {
                 switch viewModel.tab {
                 case .nook: NookView()
                 case .tray: TrayView(isDropTargeted: viewModel.isDropTargeted)
+                case .dev: DevView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -84,19 +85,31 @@ struct OpenNotchView: View {
         }
     }
 
+    private static let headerPadding: CGFloat = 16
+
+    /// Width on each side of the camera housing, so nothing in the header sits under it.
+    private var headerSideWidth: CGFloat {
+        (viewModel.openSize.width - Self.headerPadding * 2 - viewModel.notchSize.width - 16) / 2
+    }
+
     private var header: some View {
-        HStack(spacing: 4) {
-            ForEach(NotchViewModel.Tab.allCases, id: \.self) { tab in
-                TabButton(
-                    title: tab == .tray && !tray.items.isEmpty ? "\(tab.title) \(tray.items.count)" : tab.title,
-                    systemImage: tab.systemImage,
-                    isSelected: viewModel.tab == tab
-                ) {
-                    viewModel.tab = tab
+        HStack(spacing: 0) {
+            HStack(spacing: 2) {
+                ForEach(NotchViewModel.Tab.allCases, id: \.self) { tab in
+                    TabButton(
+                        title: tab.title,
+                        systemImage: tab.systemImage,
+                        badge: tab == .tray && !tray.items.isEmpty ? tray.items.count : nil,
+                        isSelected: viewModel.tab == tab
+                    ) {
+                        viewModel.tab = tab
+                    }
                 }
             }
-            // Keep the area under the camera housing empty.
-            Spacer(minLength: viewModel.notchSize.width + 16)
+            .frame(width: headerSideWidth, alignment: .leading)
+
+            Spacer(minLength: 0)
+
             Button {
                 NotificationCenter.default.post(name: .openSettings, object: nil)
             } label: {
@@ -107,26 +120,37 @@ struct OpenNotchView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .frame(width: headerSideWidth, alignment: .trailing)
         }
-        .padding(.horizontal, 16)
+        .padding(.horizontal, Self.headerPadding)
     }
 }
 
 struct TabButton: View {
     let title: String
     let systemImage: String
+    var badge: Int?
     let isSelected: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .font(.system(size: 12, weight: .medium))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(Capsule().fill(Color.white.opacity(isSelected ? 0.16 : 0)))
-                .foregroundStyle(Color.white.opacity(isSelected ? 1 : 0.55))
-                .contentShape(Capsule())
+            HStack(spacing: 4) {
+                Image(systemName: systemImage)
+                Text(title)
+                if let badge {
+                    Text("\(badge)")
+                        .font(.system(size: 9, weight: .bold).monospacedDigit())
+                        .padding(.horizontal, 4)
+                        .background(Capsule().fill(Color.white.opacity(0.25)))
+                }
+            }
+            .font(.system(size: 11, weight: .medium))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(Color.white.opacity(isSelected ? 0.16 : 0)))
+            .foregroundStyle(Color.white.opacity(isSelected ? 1 : 0.55))
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
     }
