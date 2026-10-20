@@ -1,0 +1,147 @@
+import SwiftUI
+import UniformTypeIdentifiers
+
+struct NotchRootView: View {
+    @ObservedObject var viewModel: NotchViewModel
+    @ObservedObject private var media = NowPlayingService.shared
+
+    private var isOpen: Bool { viewModel.status == .open }
+    private var isPlaying: Bool { media.nowPlaying?.isPlaying ?? false }
+    private var showsLive: Bool { viewModel.showsLiveActivity(isPlaying: isPlaying) }
+    private var size: CGSize { isOpen ? viewModel.openSize : viewModel.closedSize(isPlaying: isPlaying) }
+    private var ear: CGFloat { viewModel.earRadius(isOpen: isOpen) }
+    private var bottomRadius: CGFloat { isOpen ? 28 : (viewModel.hasNotch ? 10 : 3) }
+
+    var body: some View {
+        content
+            .frame(width: size.width, height: size.height, alignment: .top)
+            .padding(.horizontal, ear)
+            .background(NotchShape(topRadius: ear, bottomRadius: bottomRadius).fill(Color.black))
+            .clipShape(NotchShape(topRadius: ear, bottomRadius: bottomRadius))
+            .shadow(color: .black.opacity(isOpen ? 0.45 : 0), radius: 10, y: 4)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .animation(.spring(response: 0.38, dampingFraction: 0.8), value: isOpen)
+            .animation(.spring(response: 0.38, dampingFraction: 0.8), value: showsLive)
+            .preferredColorScheme(.dark)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if isOpen {
+            OpenNotchView(viewModel: viewModel)
+                .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
+        } else if showsLive {
+            LiveActivityView(artwork: media.artwork, height: viewModel.notchSize.height)
+                .transition(.opacity)
+        }
+    }
+}
+
+/// Compact view shown in the closed notch while music plays.
+struct LiveActivityView: View {
+    let artwork: NSImage?
+    let height: CGFloat
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ArtworkView(image: artwork, cornerRadius: 4)
+                .frame(width: height - 12, height: height - 12)
+            Spacer(minLength: 0)
+            EqualizerBars()
+                .frame(width: height - 12, height: height - 16)
+        }
+        .padding(.horizontal, 6)
+        .frame(maxHeight: .infinity)
+    }
+}
+
+struct OpenNotchView: View {
+    @ObservedObject var viewModel: NotchViewModel
+    @ObservedObject private var tray = TrayStore.shared
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+                .frame(height: viewModel.headerHeight)
+            Group {
+                switch viewModel.tab {
+                case .nook: NookView()
+                case .tray: TrayView(isDropTargeted: viewModel.isDropTargeted)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding(.horizontal, 18)
+            .padding(.top, 8)
+            .padding(.bottom, 16)
+        }
+        .foregroundStyle(Color.white)
+        .onDrop(of: [UTType.fileURL], isTargeted: $viewModel.isDropTargeted) { providers in
+            viewModel.tab = .tray
+            return tray.handleDrop(providers)
+        }
+        .onChange(of: viewModel.isDropTargeted) { _, targeted in
+            if targeted { viewModel.tab = .tray }
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 4) {
+            ForEach(NotchViewModel.Tab.allCases, id: \.self) { tab in
+                TabButton(
+                    title: tab == .tray && !tray.items.isEmpty ? "\(tab.title) \(tray.items.count)" : tab.title,
+                    systemImage: tab.systemImage,
+                    isSelected: viewModel.tab == tab
+                ) {
+                    viewModel.tab = tab
+                }
+            }
+            // Keep the area under the camera housing empty.
+            Spacer(minLength: viewModel.notchSize.width + 16)
+            Button {
+                NotificationCenter.default.post(name: .openSettings, object: nil)
+            } label: {
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color.white.opacity(0.6))
+                    .frame(width: 26, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.horizontal, 16)
+    }
+}
+
+struct TabButton: View {
+    let title: String
+    let systemImage: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(.system(size: 12, weight: .medium))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(Color.white.opacity(isSelected ? 0.16 : 0)))
+                .foregroundStyle(Color.white.opacity(isSelected ? 1 : 0.55))
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+/// Default tab: media player next to today's calendar.
+struct NookView: View {
+    var body: some View {
+        HStack(spacing: 16) {
+            MediaPlayerView()
+                .frame(width: 300)
+            Rectangle()
+                .fill(Color.white.opacity(0.12))
+                .frame(width: 1)
+            CalendarWidgetView()
+        }
+    }
+}
