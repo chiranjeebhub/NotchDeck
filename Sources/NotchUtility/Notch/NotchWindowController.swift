@@ -28,6 +28,7 @@ final class NotchWindowController {
     /// The cursor's y equals the screen's maxY when pushed against the top edge, and
     /// `CGRect.contains` excludes the max edge, so hit rects extend slightly past it.
     private static let topEdgeSlop: CGFloat = 4
+    private static let dragActivationHeight: CGFloat = 160
     private static let closeDelay: Duration = .milliseconds(300)
 
     init(screen: NSScreen) {
@@ -61,6 +62,15 @@ final class NotchWindowController {
         let ear = viewModel.earRadius(isOpen: false)
         let height = viewModel.hasNotch ? size.height : NotchGeometry.menuBarHeight(for: screen)
         return NotchGeometry.topCenteredRect(width: size.width + ear * 2 + 16, height: height + 2, on: screen)
+            .insetBy(dx: 0, dy: -Self.topEdgeSlop)
+    }
+
+    /// While a file is being dragged, the notch opens as soon as the cursor comes near it, well
+    /// below the top edge. Reaching the edge itself makes macOS open Mission Control instead.
+    private var dragActivationRect: CGRect {
+        let ear = viewModel.earRadius(isOpen: true)
+        return NotchGeometry
+            .topCenteredRect(width: viewModel.openSize.width + ear * 2, height: Self.dragActivationHeight, on: screen)
             .insetBy(dx: 0, dy: -Self.topEdgeSlop)
     }
 
@@ -111,10 +121,10 @@ final class NotchWindowController {
     private func evaluate(_ location: NSPoint, clicked: Bool) {
         switch viewModel.status {
         case .closed:
-            if closedHitRect.contains(location) {
-                if isDraggingFile {
-                    schedule(.open, after: .zero)
-                } else if AppSettings.openOnClick {
+            if isDraggingFile && dragActivationRect.contains(location) {
+                schedule(.open, after: .zero)
+            } else if closedHitRect.contains(location) {
+                if AppSettings.openOnClick {
                     if clicked { schedule(.open, after: .zero) }
                 } else {
                     schedule(.open, after: .milliseconds(Int(AppSettings.hoverDelay * 1000)))
