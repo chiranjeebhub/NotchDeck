@@ -1,11 +1,10 @@
 # Feature plan
 
-NotchDeck is an open-source take on [NotchNook](https://getnotchnook.com/): the MacBook notch
-becomes an interactive "dynamic island" that expands on hover.
+NotchDeck turns the MacBook notch into an interactive "dynamic island" that expands on hover.
 
-## NotchNook feature inventory
+## Feature areas
 
-| Area | NotchNook | Permission |
+| Area | What it covers | Permission |
 |---|---|---|
 | Media | Now Playing controls for Spotify, Apple Music and any app macOS lists as Now Playing; choose which app to follow | Automation |
 | Calendar | Today's events, Join buttons for Meet / Zoom / Teams / Webex (Google via Calendar.app) | Calendar |
@@ -15,9 +14,9 @@ becomes an interactive "dynamic island" that expands on hover.
 | Shortcuts | Run your Shortcuts from the notch | — |
 | HUDs | Volume and brightness indicators, Bluetooth device connections | Accessibility, Bluetooth |
 | Full-screen | Hides in full-screen apps | Accessibility |
-| Displays | One nook per display; slim handle on screens without a notch | — |
+| Displays | One notch panel per display; slim handle on screens without a notch | — |
 
-Requirements to match: macOS 14+, Apple silicon and Intel, notch optional.
+Requirements: macOS 14+, Apple silicon and Intel, notch optional.
 
 ## Phase 1: MVP (this PR)
 

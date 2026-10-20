@@ -6,7 +6,7 @@
 
 <p align="center">
   Your MacBook notch, as a hub for media, files, your calendar and local dev servers.<br>
-  Free and open source. Inspired by <a href="https://getnotchnook.com/">NotchNook</a>.
+  Free and open source.
 </p>
 
 <p align="center">
@@ -132,4 +132,4 @@ in the bundled app before opening a PR.
 
 ## License
 
-[MIT](LICENSE) © Chiranjeeb Jena. NotchDeck is not affiliated with NotchNook.
+[MIT](LICENSE) © Chiranjeeb Jena.
