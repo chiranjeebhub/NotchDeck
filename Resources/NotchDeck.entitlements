@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Hardened runtime exceptions needed by a notarized build. -->
+	<!-- AppleScript control of Spotify and Music (the Now Playing fallback). -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+	<!-- The Calendar widget. -->
+	<key>com.apple.security.personal-information.calendars</key>
+	<true/>
+</dict>
+</plist>

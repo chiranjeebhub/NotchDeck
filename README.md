@@ -55,3 +55,13 @@ Adapter/         MediaRemote helper run under /usr/bin/perl for system-wide Now 
 Resources/       Info.plist, AppIcon.png (icon master, drawn by scripts/render-icon.py)
 scripts/build-app.sh
 ```
+
+## Releasing
+
+NotchDeck ships as a notarized download rather than on the Mac App Store: the App Store sandbox
+would rule out system-wide Now Playing and the whole Dev tab (ports, stopping servers, Docker).
+
+`scripts/release.sh` builds `build/NotchDeck-<version>.dmg`, signed with your Developer ID
+Application certificate and notarized by Apple. One-time setup is described at the top of the
+script. Bump `CFBundleShortVersionString` and `CFBundleVersion` in `Resources/Info.plist` for each
+release.
