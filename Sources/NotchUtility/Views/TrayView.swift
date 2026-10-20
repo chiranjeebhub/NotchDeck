@@ -5,11 +5,14 @@ import UniformTypeIdentifiers
 struct TrayView: View {
     let isDropTargeted: Bool
     @ObservedObject private var tray = TrayStore.shared
+    @AppStorage(AppSettings.trayShowAirDropKey) private var showAirDrop = true
 
     var body: some View {
         HStack(spacing: 12) {
-            AirDropTile(urls: tray.urls)
-                .frame(width: 96)
+            if showAirDrop {
+                AirDropTile(urls: tray.urls)
+                    .frame(width: 96)
+            }
 
             if tray.items.isEmpty {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)

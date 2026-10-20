@@ -53,6 +53,13 @@ final class SystemStatsService: ObservableObject {
     @Published private(set) var cpuHistory: [Double] = []
     @Published private(set) var memory = MemoryUsage(app: 0, wired: 0, compressed: 0, total: ProcessInfo.processInfo.physicalMemory)
     @Published private(set) var docker: DockerState = .unknown
+    @Published private(set) var network = NetworkRate()
+    /// Recent download rate in bytes per second, oldest first.
+    @Published private(set) var networkHistory: [Double] = []
+    @Published private(set) var disk: DiskUsage?
+    @Published private(set) var battery: BatteryStatus?
+    @Published private(set) var gpu: Double?
+    @Published private(set) var processes: [TopProcess] = []
 
     let coreCount = ProcessInfo.processInfo.activeProcessorCount
 
@@ -60,11 +67,15 @@ final class SystemStatsService: ObservableObject {
     private var samplingTask: Task<Void, Never>?
     private var watchers = 0
     private var isRefreshingDocker = false
+    private var isRefreshingProcesses = false
+    private var previousCounters: [String: (rx: UInt32, tx: UInt32)]?
+    private var previousCountersDate = Date.now
 
     private static let sampleInterval: Duration = .seconds(2)
     private static let historyLength = 30
     /// Docker is slower to query, so it refreshes every few CPU samples.
     private static let dockerEvery = 3
+    private static let diskEvery = 15
 
     /// CPU and memory are sampled all the time (it is cheap), so the CPU graph already has a
     /// minute of history when the Dev tab opens. Docker is only queried while the tab is visible.
@@ -75,9 +86,9 @@ final class SystemStatsService: ObservableObject {
             while !Task.isCancelled {
                 guard let self else { return }
                 self.sampleCPU()
+                self.sampleNetwork()
                 if self.watchers > 0 {
-                    self.sampleMemory()
-                    if tick % Self.dockerEvery == 0 { self.refreshDocker() }
+                    self.sampleVisibleStats(tick: tick)
                     tick += 1
                 }
                 try? await Task.sleep(for: Self.sampleInterval)
@@ -88,15 +99,34 @@ final class SystemStatsService: ObservableObject {
     func startMonitoring() {
         watchers += 1
         guard watchers == 1 else { return }
-        sampleMemory()
-        refreshDocker()
+        sampleVisibleStats(tick: 0)
     }
 
     func stopMonitoring() {
         watchers = max(0, watchers - 1)
     }
 
-    // MARK: - CPU and memory
+    /// Stats that are only shown on the Dev tab, sampled while it is visible.
+    private func sampleVisibleStats(tick: Int) {
+        sampleMemory()
+        let slots = AppSettings.devStatSlots
+        if slots.contains(.gpu) {
+            let value = SystemMetrics.gpuUtilization()
+            if value != gpu { gpu = value }
+        }
+        if slots.contains(.battery) {
+            let value = SystemMetrics.battery()
+            if value != battery { battery = value }
+        }
+        if slots.contains(.disk), tick % Self.diskEvery == 0 {
+            let value = SystemMetrics.disk()
+            if value != disk { disk = value }
+        }
+        if AppSettings.wantsDocker, tick % Self.dockerEvery == 0 { refreshDocker() }
+        if AppSettings.wantsProcesses { refreshProcesses() }
+    }
+
+    // MARK: - CPU, memory and network
 
     private func sampleCPU() {
         var info = host_cpu_load_info()
@@ -141,6 +171,50 @@ final class SystemStatsService: ObservableObject {
             total: ProcessInfo.processInfo.physicalMemory
         )
         if next != memory { memory = next }
+    }
+
+    private func sampleNetwork() {
+        let counters = SystemMetrics.interfaceCounters()
+        let now = Date.now
+        defer {
+            previousCounters = counters
+            previousCountersDate = now
+        }
+        guard let previous = previousCounters else { return }
+        let seconds = now.timeIntervalSince(previousCountersDate)
+        guard seconds > 0 else { return }
+        var received: UInt64 = 0
+        var sent: UInt64 = 0
+        for (name, value) in counters {
+            guard let old = previous[name] else { continue }
+            received += UInt64(value.rx &- old.rx)
+            sent += UInt64(value.tx &- old.tx)
+        }
+        network = NetworkRate(download: Double(received) / seconds, upload: Double(sent) / seconds)
+        networkHistory.append(network.download)
+        if networkHistory.count > Self.historyLength { networkHistory.removeFirst(networkHistory.count - Self.historyLength) }
+    }
+
+    // MARK: - Processes
+
+    func refreshProcesses() {
+        guard !isRefreshingProcesses else { return }
+        isRefreshingProcesses = true
+        Task { [weak self] in
+            let list = await Task.detached(priority: .utility) { SystemMetrics.topProcesses() }.value
+            guard let self else { return }
+            self.isRefreshingProcesses = false
+            if list != self.processes { self.processes = list }
+        }
+    }
+
+    /// Asks the process to quit (SIGTERM), then refreshes the list.
+    func quit(_ process: TopProcess) {
+        Darwin.kill(process.pid, SIGTERM)
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(600))
+            self?.refreshProcesses()
+        }
     }
 
     // MARK: - Docker

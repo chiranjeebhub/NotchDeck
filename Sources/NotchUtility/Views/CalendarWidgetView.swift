@@ -4,7 +4,9 @@ struct CalendarWidgetView: View {
     enum Mode: String { case day, month }
 
     @ObservedObject private var calendar = CalendarService.shared
-    @AppStorage("calendarMode") private var mode = Mode.day
+    @AppStorage(AppSettings.calendarModeKey) private var mode = Mode.day
+    // Read so the events reload when calendars are hidden or shown in Settings.
+    @AppStorage(AppSettings.hiddenCalendarsKey) private var hiddenCalendars = ""
     @State private var selectedDay = Date.now
     @State private var displayedMonth = Date.now
 

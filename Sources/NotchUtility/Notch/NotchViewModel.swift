@@ -26,6 +26,19 @@ final class NotchViewModel: ObservableObject {
         }
     }
 
+    /// Tabs turned on in Settings. The Tray stays reachable while a file is dragged over the notch.
+    static func visibleTabs(includingTray: Bool = false) -> [Tab] {
+        let defaults = UserDefaults.standard
+        let tabs = Tab.allCases.filter { tab in
+            switch tab {
+            case .home: defaults.bool(forKey: AppSettings.showHomeTabKey)
+            case .tray: includingTray || defaults.bool(forKey: AppSettings.showTrayTabKey)
+            case .dev: defaults.bool(forKey: AppSettings.showDevTabKey)
+            }
+        }
+        return tabs.isEmpty ? [.home] : tabs
+    }
+
     @Published var status: Status = .closed
     @Published var tab: Tab = .home
     @Published var isDropTargeted = false
@@ -62,7 +75,7 @@ final class NotchViewModel: ObservableObject {
 
     /// The closed shape widens to show album art and a level meter while music plays.
     func showsLiveActivity(isPlaying: Bool) -> Bool {
-        hasNotch && isPlaying
+        hasNotch && isPlaying && AppSettings.showLiveActivity
     }
 
     func closedSize(isPlaying: Bool) -> CGSize {

@@ -1,14 +1,15 @@
 import SwiftUI
 
-/// Dev tab: system stats on top, then local servers or Docker containers.
+/// Dev tab: system stats on top, then local servers, Docker containers or top processes.
+/// What it shows is chosen in Settings → Dev.
 struct DevView: View {
-    enum DevSection: String { case servers, containers }
-
     @ObservedObject private var service = PortsService.shared
     @ObservedObject private var stats = SystemStatsService.shared
     @AppStorage(AppSettings.devShowAllPortsKey) private var showAll = false
-    @AppStorage("devSection") private var section = DevSection.servers
+    @AppStorage("devSection") private var section = DevList.servers
     @AppStorage("devShowAllContainers") private var showAllContainers = false
+    @AppStorage(AppSettings.devStatSlotsKey) private var slotsText = StatKind.encode(StatKind.defaultSlots)
+    @AppStorage(AppSettings.devListsKey) private var listsText = DevListOrder.defaultValue.encoded
     /// Reports the height the tab needs, so the notch can shrink to fit a short list.
     private let onContentHeightChange: (CGFloat) -> Void
     @State private var topHeight: CGFloat = 0
@@ -31,59 +32,53 @@ struct DevView: View {
         let all = stats.docker.containers
         return showAllContainers ? all : all.filter(\.isRunning)
     }
-    private var activeSection: DevSection { dockerAvailable ? section : .servers }
+    private var hasStats: Bool { StatKind.slots(from: slotsText).contains { $0 != .none } }
+    /// Lists turned on in Settings, without Containers while Docker isn't running.
+    private var lists: [DevList] {
+        DevListOrder(listsText).enabled.filter { $0 != .containers || dockerAvailable }
+    }
+    private var activeList: DevList? { lists.contains(section) ? section : lists.first }
+
+    private func count(of list: DevList) -> Int {
+        switch list {
+        case .servers: ports.count
+        case .containers: stats.docker.containers.count
+        case .processes: stats.processes.count
+        }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
             // Stats and the list switcher; measured to work out how tall the tab needs to be.
             VStack(alignment: .leading, spacing: Self.spacing) {
-                StatsStripView()
-
-                HStack(spacing: 8) {
-                    SegmentedToggle(
-                        options: dockerAvailable
-                            ? ["Servers  \(ports.count)", "Containers  \(stats.docker.containers.count)"]
-                            : ["Servers  \(ports.count)"],
-                        selection: Binding(
-                            get: { activeSection == .servers ? 0 : 1 },
-                            set: { section = $0 == 0 ? .servers : .containers }
-                        )
-                    )
-                    Spacer()
-                    if activeSection == .servers {
-                        SegmentedToggle(options: ["Dev", "All ports"], selection: Binding(
-                            get: { showAll ? 1 : 0 },
-                            set: { showAll = $0 == 1 }
-                        ))
-                    } else {
-                        SegmentedToggle(options: ["Running", "All"], selection: Binding(
-                            get: { showAllContainers ? 1 : 0 },
-                            set: { showAllContainers = $0 == 1 }
-                        ))
-                    }
-                    RowIconButton(systemImage: "arrow.clockwise", help: "Refresh") {
-                        Task { await service.refresh() }
-                        stats.refreshDocker()
-                    }
+                if hasStats {
+                    StatsStripView()
+                }
+                if let activeList {
+                    listControls(activeList)
                 }
             }
             .background(HeightReader(height: $topHeight))
 
             Group {
-                if activeSection == .servers {
-                    serverList
-                } else {
-                    containerList
+                switch activeList {
+                case .servers: serverList
+                case .containers: containerList
+                case .processes: processList
+                case nil:
+                    if !hasStats { nothingToShow }
                 }
             }
             // Never taller than the rows, so a short list leaves no empty space.
-            .frame(maxHeight: listHeight, alignment: .top)
+            .frame(maxHeight: activeList == nil && hasStats ? 0 : listHeight, alignment: .top)
 
             Spacer(minLength: 0)
         }
         .onChange(of: topHeight + listHeight, initial: true) { _, _ in
-            guard topHeight > 0 else { return }
-            onContentHeightChange(topHeight + Self.spacing + listHeight)
+            reportHeight()
+        }
+        .onChange(of: activeList) { _, _ in
+            reportHeight()
         }
         .onAppear {
             service.startMonitoring()
@@ -92,6 +87,76 @@ struct DevView: View {
         .onDisappear {
             service.stopMonitoring()
             stats.stopMonitoring()
+        }
+    }
+
+    private func reportHeight() {
+        let list = activeList == nil && hasStats ? 0 : listHeight
+        onContentHeightChange(topHeight + (list > 0 ? Self.spacing + list : 0))
+    }
+
+    private func listControls(_ activeList: DevList) -> some View {
+        HStack(spacing: 8) {
+            SegmentedToggle(
+                options: lists.map { "\($0.shortTitle)  \(count(of: $0))" },
+                selection: Binding(
+                    get: { lists.firstIndex(of: activeList) ?? 0 },
+                    set: { section = lists[$0] }
+                )
+            )
+            Spacer()
+            switch activeList {
+            case .servers:
+                SegmentedToggle(options: ["Dev", "All ports"], selection: Binding(
+                    get: { showAll ? 1 : 0 },
+                    set: { showAll = $0 == 1 }
+                ))
+            case .containers:
+                SegmentedToggle(options: ["Running", "All"], selection: Binding(
+                    get: { showAllContainers ? 1 : 0 },
+                    set: { showAllContainers = $0 == 1 }
+                ))
+            case .processes:
+                EmptyView()
+            }
+            RowIconButton(systemImage: "arrow.clockwise", help: "Refresh") {
+                Task { await service.refresh() }
+                stats.refreshDocker()
+                stats.refreshProcesses()
+            }
+        }
+    }
+
+    private var nothingToShow: some View {
+        VStack(spacing: 8) {
+            Text("Nothing is turned on for the Dev tab.")
+                .font(.system(size: 12))
+                .foregroundStyle(Color.white.opacity(0.6))
+            Button("Open Settings") {
+                NotificationCenter.default.post(name: .openSettings, object: SettingsPage.dev)
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(DevColors.database)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear { listHeight = Self.emptyListHeight }
+    }
+
+    @ViewBuilder
+    private var processList: some View {
+        if stats.processes.isEmpty {
+            EmptyListView(systemImage: "cpu", text: "Looking for busy apps…")
+                .onAppear { listHeight = Self.emptyListHeight }
+        } else {
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    ForEach(Array(stats.processes.enumerated()), id: \.element.id) { index, process in
+                        ProcessRow(process: process, showsDivider: index > 0)
+                    }
+                }
+                .background(HeightReader(height: $listHeight))
+            }
         }
     }
 
@@ -171,6 +236,20 @@ enum DevColors {
 enum ByteFormat {
     static func string(_ bytes: UInt64) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .memory)
+    }
+
+    /// Disk sizes use decimal units, like Finder.
+    static func disk(_ bytes: Int64) -> String {
+        ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+    }
+
+    static func rate(_ bytesPerSecond: Double) -> (value: String, unit: String) {
+        switch bytesPerSecond {
+        case ..<1_000: (String(format: "%.0f", bytesPerSecond), "B/s")
+        case ..<1_000_000: (String(format: "%.0f", bytesPerSecond / 1_000), "KB/s")
+        case ..<10_000_000: (String(format: "%.1f", bytesPerSecond / 1_000_000), "MB/s")
+        default: (String(format: "%.0f", bytesPerSecond / 1_000_000), "MB/s")
+        }
     }
 
     /// Gigabytes with one decimal, without the unit.
@@ -261,11 +340,13 @@ struct DevRowLayout<Buttons: View>: View {
     }
 }
 
-/// Stop button that needs a second click ("Stop … ?") within three seconds.
+/// Stop button that needs a second click ("Stop … ?") within three seconds,
+/// unless confirmation is turned off in Settings → Dev.
 struct ConfirmStopButton: View {
     let confirmTitle: String
     let help: String
     let action: () -> Void
+    @AppStorage(AppSettings.devConfirmStopKey) private var asksToConfirm = true
     @State private var isConfirming = false
 
     var body: some View {
@@ -275,7 +356,7 @@ struct ConfirmStopButton: View {
             foreground: isConfirming ? .white : Color(red: 0.99, green: 0.65, blue: 0.65),
             background: isConfirming ? Color.red : Color.white.opacity(0.07)
         ) {
-            if isConfirming {
+            if isConfirming || !asksToConfirm {
                 isConfirming = false
                 action()
             } else {
@@ -296,6 +377,7 @@ struct ConfirmStopButton: View {
 struct PortRow: View {
     let port: ListeningPort
     let showsDivider: Bool
+    @AppStorage(AppSettings.devShowUsageKey) private var showUsage = true
     @State private var copied = false
 
     private var dotColor: Color {
@@ -325,7 +407,7 @@ struct PortRow: View {
     }
 
     private var usage: String? {
-        guard let cpu = port.cpu, let memory = port.memory else { return nil }
+        guard showUsage, let cpu = port.cpu, let memory = port.memory else { return nil }
         return String(format: "CPU %.0f%%", cpu) + " · " + ByteFormat.string(memory)
     }
 
@@ -367,6 +449,7 @@ struct PortRow: View {
 struct ContainerRow: View {
     let container: DockerContainer
     let showsDivider: Bool
+    @AppStorage(AppSettings.devShowUsageKey) private var showUsage = true
 
     private var dotColor: Color {
         guard container.isRunning else { return DevColors.other }
@@ -374,7 +457,7 @@ struct ContainerRow: View {
     }
 
     private var usage: String? {
-        guard container.isRunning, let cpu = container.cpu, let memory = container.memory else { return nil }
+        guard showUsage, container.isRunning, let cpu = container.cpu, let memory = container.memory else { return nil }
         return "CPU \(cpu) · \(memory)"
     }
 
@@ -412,6 +495,33 @@ struct ContainerRow: View {
                     SystemStatsService.shared.start(container)
                 }
                 .help("docker start \(container.name)")
+            }
+        }
+    }
+}
+
+struct ProcessRow: View {
+    let process: TopProcess
+    let showsDivider: Bool
+    @AppStorage(AppSettings.devShowUsageKey) private var showUsage = true
+
+    private var dotColor: Color {
+        process.cpu >= 50 ? Color(red: 0.96, green: 0.62, blue: 0.04) : DevColors.web
+    }
+
+    var body: some View {
+        DevRowLayout(
+            dotColor: dotColor,
+            port: String(format: "%.0f%%", process.cpu),
+            title: process.name,
+            tag: nil,
+            details: "pid \(process.pid)",
+            usage: showUsage ? ByteFormat.string(process.memory) : nil,
+            help: "\(process.name) (pid \(process.pid))",
+            showsDivider: showsDivider
+        ) {
+            ConfirmStopButton(confirmTitle: "Quit app?", help: "Quit \(process.name) (pid \(process.pid))") {
+                SystemStatsService.shared.quit(process)
             }
         }
     }

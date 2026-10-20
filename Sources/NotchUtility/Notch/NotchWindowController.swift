@@ -187,5 +187,13 @@ final class NotchWindowController {
         viewModel.status = .closed
         viewModel.isDropTargeted = false
         panel.ignoresMouseEvents = true
+        // After typing in a widget (Notes), hand the keyboard back to the app underneath, so
+        // keystrokes don't keep going to the hidden text view. Ordering the panel out and back
+        // in gives up key status without activating anything.
+        if panel.isKeyWindow, panel.firstResponder is NSTextView {
+            panel.makeFirstResponder(nil)
+            panel.orderOut(nil)
+            panel.orderFrontRegardless()
+        }
     }
 }

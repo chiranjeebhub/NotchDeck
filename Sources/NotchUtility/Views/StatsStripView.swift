@@ -1,44 +1,145 @@
 import SwiftUI
 
-/// CPU, memory and Docker summary across the top of the Dev tab.
+/// Up to three stats across the top of the Dev tab, chosen in Settings → Dev.
 struct StatsStripView: View {
     @ObservedObject private var stats = SystemStatsService.shared
+    @AppStorage(AppSettings.devStatSlotsKey) private var slotsText = StatKind.encode(StatKind.defaultSlots)
+
+    static let height: CGFloat = 72
+
+    private var slots: [StatKind] { StatKind.slots(from: slotsText).filter { $0 != .none } }
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
-            StatColumn(label: "CPU", detail: "\(stats.coreCount) cores") {
-                BigValue(value: String(format: "%.0f", stats.cpuUsage), unit: "%")
-                Sparkline(values: stats.cpuHistory)
-                    .frame(height: 24)
-                    .padding(.top, 2)
+            ForEach(Array(slots.enumerated()), id: \.offset) { index, kind in
+                if index > 0 { divider }
+                column(for: kind)
+                    .padding(.leading, index == 0 ? 4 : 0)
             }
-            .padding(.leading, 4)
-
-            divider
-
-            StatColumn(label: "Memory", detail: ByteFormat.string(stats.memory.total)) {
-                BigValue(value: ByteFormat.gigabytes(stats.memory.used), unit: "GB used")
-                MemoryMeter(memory: stats.memory)
-                    .frame(height: 5)
-                    .padding(.top, 6)
-                Text("App \(ByteFormat.gigabytes(stats.memory.app)) · Wired \(ByteFormat.gigabytes(stats.memory.wired)) · Compr. \(ByteFormat.gigabytes(stats.memory.compressed)) GB")
-                    .font(.system(size: 9.5))
-                    .foregroundStyle(Color.white.opacity(0.45))
-                    .lineLimit(1)
-                    .padding(.top, 3)
-            }
-
-            divider
-
-            dockerColumn
         }
-        .frame(height: 72)
+        .frame(height: Self.height)
     }
 
     private var divider: some View {
         Rectangle()
             .fill(Color.white.opacity(0.08))
             .frame(width: 1)
+    }
+
+    @ViewBuilder
+    private func column(for kind: StatKind) -> some View {
+        switch kind {
+        case .cpu: cpuColumn
+        case .memory: memoryColumn
+        case .docker: dockerColumn
+        case .network: networkColumn
+        case .disk: diskColumn
+        case .battery: batteryColumn
+        case .gpu: gpuColumn
+        case .uptime: uptimeColumn
+        case .none: EmptyView()
+        }
+    }
+
+    private var cpuColumn: some View {
+        StatColumn(label: "CPU", detail: "\(stats.coreCount) cores") {
+            BigValue(value: String(format: "%.0f", stats.cpuUsage), unit: "%")
+            Sparkline(values: stats.cpuHistory)
+                .frame(height: 24)
+                .padding(.top, 2)
+        }
+    }
+
+    private var memoryColumn: some View {
+        StatColumn(label: "Memory", detail: ByteFormat.string(stats.memory.total)) {
+            BigValue(value: ByteFormat.gigabytes(stats.memory.used), unit: "GB used")
+            MemoryMeter(memory: stats.memory)
+                .frame(height: 5)
+                .padding(.top, 6)
+            Text("App \(ByteFormat.gigabytes(stats.memory.app)) · Wired \(ByteFormat.gigabytes(stats.memory.wired)) · Compr. \(ByteFormat.gigabytes(stats.memory.compressed)) GB")
+                .font(.system(size: 9.5))
+                .foregroundStyle(Color.white.opacity(0.45))
+                .lineLimit(1)
+                .padding(.top, 3)
+        }
+    }
+
+    private var networkColumn: some View {
+        StatColumn(label: "Network", detail: nil) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                RateValue(symbol: "arrow.down", bytesPerSecond: stats.network.download)
+                RateValue(symbol: "arrow.up", bytesPerSecond: stats.network.upload)
+            }
+            .padding(.top, 2)
+            Sparkline(values: stats.networkHistory, ceiling: nil, minimumSpan: 50_000)
+                .frame(height: 24)
+                .padding(.top, 2)
+        }
+    }
+
+    private var diskColumn: some View {
+        StatColumn(label: "Disk", detail: stats.disk.map { ByteFormat.disk($0.total) }) {
+            if let disk = stats.disk {
+                BigValue(value: ByteFormat.disk(disk.free), unit: "free")
+                ProgressMeter(fraction: Double(disk.used) / Double(max(disk.total, 1)), color: DevColors.database)
+                    .frame(height: 5)
+                    .padding(.top, 6)
+            } else {
+                PlaceholderValue(text: "Checking…")
+            }
+        }
+    }
+
+    private var batteryColumn: some View {
+        StatColumn(label: "Battery", detail: stats.battery.map { $0.isCharging ? "Charging" : $0.isOnPower ? "On power" : "On battery" }) {
+            if let battery = stats.battery {
+                BigValue(value: String(battery.percent), unit: batteryDetail(battery))
+                ProgressMeter(fraction: Double(battery.percent) / 100,
+                              color: battery.percent <= 20 && !battery.isOnPower ? .red : DevColors.web)
+                    .frame(height: 5)
+                    .padding(.top, 6)
+            } else {
+                PlaceholderValue(text: "No battery")
+            }
+        }
+    }
+
+    private func batteryDetail(_ battery: BatteryStatus) -> String {
+        guard !battery.isOnPower, let minutes = battery.minutesLeft else { return "%" }
+        return "% · \(minutes / 60)h \(minutes % 60)m left"
+    }
+
+    private var gpuColumn: some View {
+        StatColumn(label: "GPU", detail: nil) {
+            if let gpu = stats.gpu {
+                BigValue(value: String(format: "%.0f", gpu), unit: "%")
+                ProgressMeter(fraction: gpu / 100, color: Color(red: 0.65, green: 0.55, blue: 0.98))
+                    .frame(height: 5)
+                    .padding(.top, 6)
+            } else {
+                PlaceholderValue(text: "Not available")
+            }
+        }
+    }
+
+    private var uptimeColumn: some View {
+        StatColumn(label: "Uptime", detail: nil) {
+            if let boot = SystemMetrics.bootDate {
+                TimelineView(.periodic(from: .now, by: 60)) { context in
+                    let minutes = max(Int(context.date.timeIntervalSince(boot) / 60), 0)
+                    let days = minutes / 1440
+                    let hours = (minutes % 1440) / 60
+                    BigValue(value: days > 0 ? "\(days)d \(hours)h" : "\(hours)h \(minutes % 60)m", unit: "")
+                }
+                Text("Since \(boot.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(Color.white.opacity(0.45))
+                    .lineLimit(1)
+                    .padding(.top, 6)
+            } else {
+                PlaceholderValue(text: "Unknown")
+            }
+        }
     }
 
     @ViewBuilder
@@ -56,10 +157,7 @@ struct StatsStripView: View {
             }
         case .notRunning, .notInstalled, .unknown:
             StatColumn(label: "Docker", detail: nil) {
-                Text(stats.docker == .notInstalled ? "Not installed" : stats.docker == .unknown ? "Checking…" : "Not running")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Color.white.opacity(0.6))
-                    .padding(.top, 6)
+                PlaceholderValue(text: stats.docker == .notInstalled ? "Not installed" : stats.docker == .unknown ? "Checking…" : "Not running")
                 if stats.docker == .notRunning {
                     Button("Start Docker") {
                         if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.docker.docker") {
@@ -72,6 +170,54 @@ struct StatsStripView: View {
                     .padding(.top, 4)
                 }
             }
+        }
+    }
+}
+
+struct PlaceholderValue: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(Color.white.opacity(0.6))
+            .padding(.top, 6)
+    }
+}
+
+/// "↓ 2.1 MB/s" with the number large and the unit small.
+struct RateValue: View {
+    let symbol: String
+    let bytesPerSecond: Double
+
+    var body: some View {
+        let parts = ByteFormat.rate(bytesPerSecond)
+        HStack(alignment: .firstTextBaseline, spacing: 3) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(Color.white.opacity(0.5))
+            Text(parts.value)
+                .font(.system(size: 20, weight: .medium).monospacedDigit())
+            Text(parts.unit)
+                .font(.system(size: 10.5))
+                .foregroundStyle(Color.white.opacity(0.45))
+        }
+        .lineLimit(1)
+    }
+}
+
+/// A thin filled bar, for disk, battery and GPU.
+struct ProgressMeter: View {
+    let fraction: Double
+    let color: Color
+
+    var body: some View {
+        GeometryReader { geometry in
+            Capsule()
+                .fill(color)
+                .frame(width: geometry.size.width * min(max(fraction, 0), 1))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Capsule().fill(Color.white.opacity(0.1)))
         }
     }
 }
@@ -129,13 +275,17 @@ struct StatusPill: View {
     }
 }
 
-/// Filled line chart of recent CPU usage (0–100%).
+/// Filled line chart of recent values, such as CPU usage.
 struct Sparkline: View {
     let values: [Double]
+    /// Highest value the scale can reach (100 for percentages), or nil for no limit.
+    var ceiling: Double? = 100
+    /// Smallest range the scale covers, so noise doesn't fill the whole height.
+    var minimumSpan: Double = 10
 
     var body: some View {
         GeometryReader { geometry in
-            let points = Self.points(values, in: geometry.size)
+            let points = points(in: geometry.size)
             ZStack {
                 if points.count > 1 {
                     Path { path in
@@ -158,11 +308,11 @@ struct Sparkline: View {
 
     /// The vertical scale follows the recent range, so small changes stay visible
     /// (a fixed 0–100% scale draws 18–25% as a flat line along the bottom).
-    private static func points(_ values: [Double], in size: CGSize) -> [CGPoint] {
+    private func points(in size: CGSize) -> [CGPoint] {
         guard values.count > 1, let low = values.min(), let high = values.max() else { return [] }
-        let padding = max((high - low) * 0.25, 2)
+        let padding = max((high - low) * 0.25, minimumSpan / 5)
         let bottom = max(low - padding, 0)
-        let top = min(max(high + padding, bottom + 10), 100)
+        let top = min(max(high + padding, bottom + minimumSpan), ceiling ?? .infinity)
         let span = max(top - bottom, 1)
         let step = size.width / CGFloat(values.count - 1)
         return values.enumerated().map { index, value in

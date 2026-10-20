@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 struct NotchRootView: View {
     @ObservedObject var viewModel: NotchViewModel
     @ObservedObject private var media = NowPlayingService.shared
+    // Read so the view redraws when the setting changes.
+    @AppStorage(AppSettings.showLiveActivityKey) private var showLiveActivity = true
 
     private var isOpen: Bool { viewModel.status == .open }
     private var isPlaying: Bool { media.nowPlaying?.isPlaying ?? false }
@@ -59,6 +61,10 @@ struct LiveActivityView: View {
 struct OpenNotchView: View {
     @ObservedObject var viewModel: NotchViewModel
     @ObservedObject private var tray = TrayStore.shared
+    @AppStorage(AppSettings.showHomeTabKey) private var showHome = true
+    @AppStorage(AppSettings.showTrayTabKey) private var showTray = true
+    @AppStorage(AppSettings.showDevTabKey) private var showDev = true
+    @AppStorage(AppSettings.showTabLabelsKey) private var showTabLabels = true
     private static let contentTopPadding: CGFloat = 8
     private static let contentBottomPadding: CGFloat = 16
 
@@ -93,10 +99,19 @@ struct OpenNotchView: View {
         .onChange(of: viewModel.tab) { _, tab in
             if tab != .dev { viewModel.preferredHeight = nil }
         }
+        .onChange(of: visibleTabs, initial: true) { _, tabs in
+            if !tabs.contains(viewModel.tab), let first = tabs.first { viewModel.tab = first }
+        }
         .onDisappear { viewModel.preferredHeight = nil }
     }
 
     private static let headerPadding: CGFloat = 16
+
+    private var visibleTabs: [NotchViewModel.Tab] {
+        // The @AppStorage reads above keep this in sync with Settings.
+        _ = (showHome, showTray, showDev)
+        return NotchViewModel.visibleTabs(includingTray: viewModel.tab == .tray || viewModel.isDropTargeted)
+    }
 
     /// Width on each side of the camera housing, so nothing in the header sits under it.
     private var headerSideWidth: CGFloat {
@@ -106,15 +121,16 @@ struct OpenNotchView: View {
     private var header: some View {
         HStack(spacing: 0) {
             HStack(spacing: 2) {
-                ForEach(NotchViewModel.Tab.allCases, id: \.self) { tab in
+                ForEach(visibleTabs, id: \.self) { tab in
                     TabButton(
-                        title: tab.title,
+                        title: showTabLabels ? tab.title : nil,
                         systemImage: tab.systemImage,
                         badge: tab == .tray && !tray.items.isEmpty ? tray.items.count : nil,
                         isSelected: viewModel.tab == tab
                     ) {
                         viewModel.tab = tab
                     }
+                    .help(tab.title)
                 }
             }
             .frame(width: headerSideWidth, alignment: .leading)
@@ -122,7 +138,13 @@ struct OpenNotchView: View {
             Spacer(minLength: 0)
 
             Button {
-                NotificationCenter.default.post(name: .openSettings, object: nil)
+                // Settings opens on the page for the tab you're looking at.
+                let page: SettingsPage = switch viewModel.tab {
+                case .home: .home
+                case .tray: .tray
+                case .dev: .dev
+                }
+                NotificationCenter.default.post(name: .openSettings, object: page)
             } label: {
                 Image(systemName: "gearshape.fill")
                     .font(.system(size: 13))
@@ -138,7 +160,8 @@ struct OpenNotchView: View {
 }
 
 struct TabButton: View {
-    let title: String
+    /// nil shows the icon only.
+    let title: String?
     let systemImage: String
     var badge: Int?
     let isSelected: Bool
@@ -148,7 +171,7 @@ struct TabButton: View {
         Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: systemImage)
-                Text(title)
+                if let title { Text(title) }
                 if let badge {
                     Text("\(badge)")
                         .font(.system(size: 9, weight: .bold).monospacedDigit())
@@ -167,16 +190,83 @@ struct TabButton: View {
     }
 }
 
-/// Default tab: media player next to the calendar.
+/// Default tab: two widgets side by side, chosen in Settings → Home.
 struct HomeView: View {
+    @AppStorage(AppSettings.homeLeftWidgetKey) private var left = HomeWidget.nowPlaying
+    @AppStorage(AppSettings.homeRightWidgetKey) private var right = HomeWidget.calendar
+
+    private var widgets: [HomeWidget] { [left, right].filter { $0 != .none } }
+
     var body: some View {
-        HStack(spacing: 16) {
-            MediaPlayerView()
-                .frame(width: 300)
-            Rectangle()
-                .fill(Color.white.opacity(0.12))
-                .frame(width: 1)
-            CalendarWidgetView()
+        if widgets.isEmpty {
+            VStack(spacing: 8) {
+                Text("No widgets on the Home tab.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color.white.opacity(0.6))
+                Button("Open Settings") {
+                    NotificationCenter.default.post(name: .openSettings, object: SettingsPage.home)
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(DevColors.database)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            HStack(spacing: 16) {
+                ForEach(Array(widgets.enumerated()), id: \.offset) { index, widget in
+                    if index > 0 {
+                        Rectangle()
+                            .fill(Color.white.opacity(0.12))
+                            .frame(width: 1)
+                    }
+                    view(for: widget)
+                }
+            }
         }
+    }
+
+    @ViewBuilder
+    private func view(for widget: HomeWidget) -> some View {
+        switch widget {
+        case .nowPlaying:
+            // The player keeps its natural width unless it is alone.
+            MediaPlayerView()
+                .frame(width: widgets.count > 1 ? 300 : nil)
+        case .calendar:
+            CalendarWidgetView()
+        case .notes:
+            NotesWidgetView()
+        case .none:
+            EmptyView()
+        }
+    }
+}
+
+/// A scratch pad saved as you type.
+struct NotesWidgetView: View {
+    @AppStorage(AppSettings.homeNotesKey) private var text = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Notes")
+                .font(.system(size: 13, weight: .semibold))
+            TextEditor(text: $text)
+                .font(.system(size: 12))
+                .scrollContentBackground(.hidden)
+                .scrollIndicators(.never)
+                .padding(6)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white.opacity(0.06)))
+                .overlay(alignment: .topLeading) {
+                    if text.isEmpty {
+                        Text("Jot something down…")
+                            .font(.system(size: 12))
+                            .foregroundStyle(Color.white.opacity(0.35))
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 6)
+                            .allowsHitTesting(false)
+                    }
+                }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }

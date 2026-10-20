@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(screensChanged), name: NSApplication.didChangeScreenParametersNotification, object: nil)
         center.addObserver(self, selector: #selector(defaultsChanged), name: UserDefaults.didChangeNotification, object: nil)
-        center.addObserver(self, selector: #selector(openSettings), name: .openSettings, object: nil)
+        center.addObserver(self, selector: #selector(openSettings(_:)), name: .openSettings, object: nil)
     }
 
     // MARK: - Notch windows
@@ -55,7 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
         menu.addItem(withTitle: "Open Notch", action: #selector(openNotch), keyEquivalent: "").target = self
-        menu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        menu.addItem(withTitle: "Settings…", action: #selector(openSettings(_:)), keyEquivalent: ",").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit NotchUtility", action: #selector(quit), keyEquivalent: "q").target = self
         item.menu = menu
@@ -67,11 +67,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         (controllers.first { $0.screen == screen } ?? controllers.first)?.showFromMenu()
     }
 
-    @objc private func openSettings() {
+    /// Opens Settings, on a specific page when the notification carries a `SettingsPage`.
+    @objc private func openSettings(_ sender: Any?) {
+        if let page = (sender as? Notification)?.object as? SettingsPage {
+            SettingsNavigation.shared.page = page
+        }
         if settingsWindow == nil {
             let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()))
             window.title = "NotchUtility Settings"
-            window.styleMask = [.titled, .closable]
+            window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+            // A toolbar gives the sidebar its full-height, unified look.
+            window.toolbar = NSToolbar(identifier: "Settings")
+            window.toolbarStyle = .unified
+            window.setContentSize(NSSize(width: 760, height: 540))
             window.isReleasedWhenClosed = false
             window.center()
             settingsWindow = window

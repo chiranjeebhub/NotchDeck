@@ -122,8 +122,20 @@ final class CalendarService: NSObject, ObservableObject {
         return counts
     }
 
+    /// Every event calendar, for Settings → Calendar.
+    func allCalendars() -> [EKCalendar] {
+        guard hasAccess else { return [] }
+        return store.calendars(for: .event).sorted {
+            ($0.source?.title ?? "", $0.title) < ($1.source?.title ?? "", $1.title)
+        }
+    }
+
     private func fetch(from start: Date, to end: Date) -> [EKEvent] {
-        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
+        let hidden = AppSettings.hiddenCalendars
+        let calendars = hidden.isEmpty ? nil : store.calendars(for: .event).filter { !hidden.contains($0.calendarIdentifier) }
+        // An empty list would mean "all calendars" to EventKit.
+        if calendars?.isEmpty == true { return [] }
+        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: calendars)
         return store.events(matching: predicate).sorted { $0.startDate < $1.startDate }
     }
 

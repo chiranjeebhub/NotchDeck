@@ -26,17 +26,58 @@ final class TrayStore: ObservableObject {
 
     var urls: [URL] { items.map(\.url) }
 
+    /// Where dropped files are copied when "Copy dropped files" is on.
+    nonisolated static let copiesDirectory: URL = {
+        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        return support.appendingPathComponent("NotchUtility/Tray", isDirectory: true)
+    }()
+
     func add(_ urls: [URL]) {
+        guard AppSettings.trayCopyFiles else {
+            append(urls)
+            return
+        }
+        Task { [weak self] in
+            let copies = await Task.detached(priority: .userInitiated) { urls.compactMap { TrayStore.makeCopy(of: $0) } }.value
+            self?.append(copies)
+        }
+    }
+
+    private func append(_ urls: [URL]) {
         let existing = Set(items.map(\.url))
         items.append(contentsOf: urls.filter { !existing.contains($0) }.map { TrayItem(url: $0) })
     }
 
+    /// Copies the file into its own folder (so names never clash), keeping its name.
+    nonisolated private static func makeCopy(of url: URL) -> URL? {
+        let folder = copiesDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let destination = folder.appendingPathComponent(url.lastPathComponent)
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: url, to: destination)
+            return destination
+        } catch {
+            NSLog("NotchUtility: couldn't copy \(url.path) into the tray: \(error)")
+            return url
+        }
+    }
+
     func remove(_ item: TrayItem) {
         items.removeAll { $0.id == item.id }
+        deleteCopy(of: item.url)
     }
 
     func removeAll() {
+        let urls = items.map(\.url)
         items.removeAll()
+        urls.forEach(deleteCopy)
+    }
+
+    /// Copies made by the tray are deleted when they leave it; originals never are.
+    private func deleteCopy(of url: URL) {
+        let folder = url.deletingLastPathComponent()
+        guard folder.deletingLastPathComponent().standardizedFileURL == Self.copiesDirectory.standardizedFileURL else { return }
+        try? FileManager.default.removeItem(at: folder)
     }
 
     /// Loads file URLs from a SwiftUI drop. Returns whether any provider carried a file.
