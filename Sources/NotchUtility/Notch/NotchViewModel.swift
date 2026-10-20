@@ -7,11 +7,11 @@ final class NotchViewModel: ObservableObject {
     enum Status { case closed, open }
 
     enum Tab: String, CaseIterable {
-        case nook, tray, dev
+        case home, tray, dev
 
         var title: String {
             switch self {
-            case .nook: "Nook"
+            case .home: "Home"
             case .tray: "Tray"
             case .dev: "Dev"
             }
@@ -19,7 +19,7 @@ final class NotchViewModel: ObservableObject {
 
         var systemImage: String {
             switch self {
-            case .nook: "rectangle.3.group"
+            case .home: "rectangle.3.group"
             case .tray: "tray"
             case .dev: "terminal"
             }
@@ -27,14 +27,22 @@ final class NotchViewModel: ObservableObject {
     }
 
     @Published var status: Status = .closed
-    @Published var tab: Tab = .nook
+    @Published var tab: Tab = .home
     @Published var isDropTargeted = false
+    /// The Dev tab doubles the panel's height when it has many servers to show.
+    @Published var isTall = false
 
     let hasNotch: Bool
     /// Physical notch size, or the handle size on screens without a notch.
     let notchSize: CGSize
+    static let openWidth: CGFloat = 700
+    static let openHeight: CGFloat = 230
+    static let tallOpenHeight: CGFloat = 430
+
     /// Size of the expanded content area (without the concave "ears").
-    let openSize = CGSize(width: 700, height: 230)
+    var openSize: CGSize { CGSize(width: Self.openWidth, height: isTall ? Self.tallOpenHeight : Self.openHeight) }
+    /// The largest the open notch can get, which sizes its window.
+    var maxOpenSize: CGSize { CGSize(width: Self.openWidth, height: Self.tallOpenHeight) }
 
     init(screen: NSScreen) {
         hasNotch = NotchGeometry.hasNotch(screen)

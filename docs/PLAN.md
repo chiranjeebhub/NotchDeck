@@ -47,5 +47,6 @@ Requirements to match: macOS 14+, Apple silicon and Intel, notch optional.
 
 - [ ] Volume / brightness HUD replacement
 - [ ] Bluetooth device connected notifications with battery level
+- [x] Home tab calendar with Day / Month views; Dev tab grows when many servers run
 - [ ] Customisable widget layout
 - [ ] Signed + notarised release builds, Sparkle auto-updates

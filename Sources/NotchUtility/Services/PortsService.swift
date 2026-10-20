@@ -10,6 +10,39 @@ struct ListeningPort: Identifiable, Hashable, Sendable {
     var directory: String?
 
     var id: String { "\(pid):\(port)" }
+
+    enum Kind { case web, database, other }
+
+    private static let databaseKeywords = [
+        "postgres", "mysql", "maria", "mongo", "redis", "memcached", "clickhouse",
+        "elastic", "opensearch", "rabbitmq", "kafka", "cockroach", "influx", "couchdb",
+    ]
+    private static let otherCommands: Set<String> = ["adb", "com.docker.backend", "vpnkit-bridge", "ssh"]
+    private static let webCommands = [
+        "node", "bun", "deno", "python", "ruby", "php", "java", "go", "rails", "puma", "uvicorn",
+        "gunicorn", "next", "vite", "dotnet", "beam.smp", "hugo", "caddy", "nginx", "httpd",
+    ]
+
+    /// Best guess at what kind of server this is, used for colour and whether Open makes sense.
+    var kind: Kind {
+        let name = command.lowercased()
+        if Self.databaseKeywords.contains(where: { name.contains($0) }) { return .database }
+        if Self.otherCommands.contains(name) { return .other }
+        if Self.webCommands.contains(where: { name == $0 || name.hasPrefix($0) }) { return .web }
+        let devRanges = [3000...3999, 4000...4999, 5000...5999, 8000...8999, 9000...9999]
+        return devRanges.contains { $0.contains(port) } ? .web : .other
+    }
+
+    var isLocalOnly: Bool {
+        ["127.0.0.1", "[::1]", "localhost"].contains(address)
+    }
+
+    /// The working directory with the home folder shortened to ~.
+    var shortDirectory: String? {
+        guard let directory, directory != "/" else { return nil }
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return directory.hasPrefix(home) ? "~" + directory.dropFirst(home.count) : directory
+    }
     var projectName: String? {
         guard let directory, directory != "/" else { return nil }
         return URL(fileURLWithPath: directory).lastPathComponent
@@ -67,6 +100,11 @@ final class PortsService: ObservableObject {
 
     func open(_ port: ListeningPort) {
         NSWorkspace.shared.open(port.url)
+    }
+
+    func copyURL(_ port: ListeningPort) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(port.url.absoluteString, forType: .string)
     }
 
     /// Asks the process to quit (SIGTERM). Only processes owned by the user can be killed.

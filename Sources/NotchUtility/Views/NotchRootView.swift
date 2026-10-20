@@ -22,6 +22,7 @@ struct NotchRootView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .animation(.spring(response: 0.38, dampingFraction: 0.8), value: isOpen)
             .animation(.spring(response: 0.38, dampingFraction: 0.8), value: showsLive)
+            .animation(.spring(response: 0.38, dampingFraction: 0.85), value: viewModel.isTall)
             .preferredColorScheme(.dark)
     }
 
@@ -58,6 +59,15 @@ struct LiveActivityView: View {
 struct OpenNotchView: View {
     @ObservedObject var viewModel: NotchViewModel
     @ObservedObject private var tray = TrayStore.shared
+    @ObservedObject private var ports = PortsService.shared
+    @AppStorage(AppSettings.devShowAllPortsKey) private var showAllPorts = false
+
+    /// Rows that fit in the normal height; more than this and the Dev tab grows.
+    private static let devRowsBeforeGrowing = 3
+
+    private var wantsTall: Bool {
+        viewModel.tab == .dev && ports.visiblePorts(showAll: showAllPorts).count > Self.devRowsBeforeGrowing
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -65,7 +75,7 @@ struct OpenNotchView: View {
                 .frame(height: viewModel.headerHeight)
             Group {
                 switch viewModel.tab {
-                case .nook: NookView()
+                case .home: HomeView()
                 case .tray: TrayView(isDropTargeted: viewModel.isDropTargeted)
                 case .dev: DevView()
                 }
@@ -83,6 +93,10 @@ struct OpenNotchView: View {
         .onChange(of: viewModel.isDropTargeted) { _, targeted in
             if targeted { viewModel.tab = .tray }
         }
+        .onChange(of: wantsTall, initial: true) { _, tall in
+            viewModel.isTall = tall
+        }
+        .onDisappear { viewModel.isTall = false }
     }
 
     private static let headerPadding: CGFloat = 16
@@ -156,8 +170,8 @@ struct TabButton: View {
     }
 }
 
-/// Default tab: media player next to today's calendar.
-struct NookView: View {
+/// Default tab: media player next to the calendar.
+struct HomeView: View {
     var body: some View {
         HStack(spacing: 16) {
             MediaPlayerView()

@@ -43,13 +43,14 @@ struct MeetingLink {
     }
 }
 
-/// Today's remaining events from every calendar in the Calendar app (including Google accounts added there).
+/// Events from every calendar in the Calendar app (including Google accounts added there).
 @MainActor
 final class CalendarService: NSObject, ObservableObject {
     static let shared = CalendarService()
 
-    @Published private(set) var events: [CalendarEvent] = []
     @Published private(set) var authorization = EKEventStore.authorizationStatus(for: .event)
+    /// Bumped whenever the event store or the time of day changes, so views re-query.
+    @Published private(set) var revision = 0
 
     private let store = EKEventStore()
     private var refreshTask: Task<Void, Never>?
@@ -73,24 +74,23 @@ final class CalendarService: NSObject, ObservableObject {
     func requestAccess() {
         Task {
             _ = try? await store.requestFullAccessToEvents()
-            authorization = EKEventStore.authorizationStatus(for: .event)
             reload()
         }
     }
 
     func reload() {
         authorization = EKEventStore.authorizationStatus(for: .event)
-        guard hasAccess else {
-            events = []
-            return
-        }
+        revision += 1
+    }
+
+    /// Events on `day`, sorted by start time. For today, events that already ended are left out.
+    func events(on day: Date) -> [CalendarEvent] {
         let calendar = Calendar.current
-        let startOfDay = calendar.startOfDay(for: .now)
-        guard let endOfDay = calendar.date(byAdding: .day, value: 1, to: startOfDay) else { return }
-        let predicate = store.predicateForEvents(withStart: startOfDay, end: endOfDay, calendars: nil)
-        events = store.events(matching: predicate)
-            .filter { $0.endDate > .now }
-            .sorted { $0.startDate < $1.startDate }
+        let start = calendar.startOfDay(for: day)
+        guard hasAccess, let end = calendar.date(byAdding: .day, value: 1, to: start) else { return [] }
+        let isToday = calendar.isDateInToday(day)
+        return fetch(from: start, to: end)
+            .filter { !isToday || $0.endDate > .now }
             .map { event in
                 CalendarEvent(
                     id: event.calendarItemIdentifier + "\(event.startDate.timeIntervalSince1970)",
@@ -102,6 +102,29 @@ final class CalendarService: NSObject, ObservableObject {
                     meeting: MeetingLink.find(in: event)
                 )
             }
+    }
+
+    /// Number of events starting on each day (1...31) of the month containing `date`.
+    func eventCounts(inMonthOf date: Date) -> [Int: Int] {
+        let calendar = Calendar.current
+        guard hasAccess, let month = calendar.dateInterval(of: .month, for: date) else { return [:] }
+        var counts: [Int: Int] = [:]
+        for event in fetch(from: month.start, to: month.end) {
+            // Multi-day events count on each day they cover within the month.
+            var day = max(calendar.startOfDay(for: event.startDate), month.start)
+            let last = min(event.isAllDay ? event.endDate.addingTimeInterval(-1) : event.endDate, month.end.addingTimeInterval(-1))
+            while day <= last {
+                counts[calendar.component(.day, from: day), default: 0] += 1
+                guard let next = calendar.date(byAdding: .day, value: 1, to: day) else { break }
+                day = next
+            }
+        }
+        return counts
+    }
+
+    private func fetch(from start: Date, to end: Date) -> [EKEvent] {
+        let predicate = store.predicateForEvents(withStart: start, end: end, calendars: nil)
+        return store.events(matching: predicate).sorted { $0.startDate < $1.startDate }
     }
 
     static func openPrivacySettings() {

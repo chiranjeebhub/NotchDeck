@@ -35,8 +35,8 @@ final class NotchWindowController {
         viewModel = NotchViewModel(screen: screen)
 
         let ear = viewModel.earRadius(isOpen: true)
-        let width = viewModel.openSize.width + ear * 2 + Self.shadowPadding * 2
-        let height = viewModel.openSize.height + Self.shadowPadding
+        let width = viewModel.maxOpenSize.width + ear * 2 + Self.shadowPadding * 2
+        let height = viewModel.maxOpenSize.height + Self.shadowPadding
         panel = NotchPanel(contentRect: NotchGeometry.topCenteredRect(width: width, height: height, on: screen))
         panel.contentView = NotchHostingView(rootView: NotchRootView(viewModel: viewModel))
         panel.ignoresMouseEvents = true
