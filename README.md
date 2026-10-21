@@ -1,12 +1,5 @@
 <p align="center">
-  <img src="docs/images/logo.png" width="128" height="128" alt="NotchDeck icon">
-</p>
-
-<h1 align="center">NotchDeck</h1>
-
-<p align="center">
-  Your MacBook notch, as a hub for media, files, your calendar and local dev servers.<br>
-  Free and open source.
+  <img src="docs/images/social-preview.png" alt="NotchDeck: your MacBook notch, as a hub for media, files, calendar and local dev servers. Free and open source, macOS 14+." width="100%">
 </p>
 
 <p align="center">
