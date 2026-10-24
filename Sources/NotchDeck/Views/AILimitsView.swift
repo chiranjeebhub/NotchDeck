@@ -39,6 +39,29 @@ extension UsageLimit.Pace {
     }
 }
 
+/// Whether numbers and bars show what's used or what's left, chosen in Settings → AI usage.
+struct AIUsageDisplay {
+    let showsUsed: Bool
+
+    var word: String { showsUsed ? "used" : "left" }
+
+    func value(_ limit: UsageLimit) -> Double {
+        showsUsed ? 100 - limit.remaining : limit.remaining
+    }
+
+    func expected(_ limit: UsageLimit, now: Date) -> Double? {
+        limit.expectedRemaining(at: now).map { showsUsed ? 100 - $0 : $0 }
+    }
+
+    func number(_ limit: UsageLimit) -> String {
+        String(format: "%.0f", value(limit).rounded())
+    }
+
+    func bar(_ limit: UsageLimit, color: Color, now: Date) -> UsageBar {
+        UsageBar(value: value(limit), expected: expected(limit, now: now), color: color, fillsWithUsed: showsUsed)
+    }
+}
+
 /// "Resets in 3h 38m · at 2:50 PM" and friends.
 enum ResetFormat {
     static func countdown(to date: Date, now: Date) -> String {
@@ -89,12 +112,13 @@ enum ResetFormat {
     }
 }
 
-/// Filled with what's left, in the provider's colour. The white tick is where you'd be
-/// if you spread your usage evenly over the window: fill past the tick means you're fine.
+/// Filled with what's used (or left), in the provider's colour. The white tick is where you'd be
+/// if you spread your usage evenly over the window.
 struct UsageBar: View {
-    let remaining: Double
+    let value: Double
     let expected: Double?
     let color: Color
+    let fillsWithUsed: Bool
 
     private func fraction(_ value: Double) -> CGFloat { CGFloat(min(max(value / 100, 0), 1)) }
 
@@ -105,7 +129,7 @@ struct UsageBar: View {
                 .fill(Color.white.opacity(0.1))
                 .overlay(alignment: .leading) {
                     Capsule().fill(color)
-                        .frame(width: geometry.size.width * fraction(remaining))
+                        .frame(width: geometry.size.width * fraction(value))
                 }
                 .overlay(alignment: .leading) {
                     if let expected {
@@ -116,7 +140,8 @@ struct UsageBar: View {
                     }
                 }
         }
-        .help(expected == nil ? "" : "The white mark is where you'd be if you used it evenly until the reset. Fill past the mark means it will last.")
+        .help(expected == nil ? "" : "The white mark is where you'd be if you used it evenly until the reset. "
+              + (fillsWithUsed ? "Fill short of the mark means it will last." : "Fill past the mark means it will last."))
     }
 }
 
@@ -146,7 +171,7 @@ struct AILimitsListView: View {
     var body: some View {
         Group {
             if ai.enabledProviders.isEmpty {
-                EmptyListView(systemImage: "sparkles", text: "Claude and Codex are turned off in Settings → AI limits")
+                EmptyListView(systemImage: "sparkles", text: "Claude and Codex are turned off in Settings → AI usage")
                     .onAppear { listHeight = 90 }
             } else {
                 ScrollView(showsIndicators: false) {
@@ -216,21 +241,23 @@ struct AILimitRow: View {
     let age: String?
     let now: Date
     let showsDivider: Bool
+    @AppStorage(AppSettings.aiShowUsedKey) private var showsUsed = true
 
     var body: some View {
         let pace = limit.pace(at: now)
+        let display = AIUsageDisplay(showsUsed: showsUsed)
         DevRowLayout(
             dotColor: provider.color,
-            port: String(format: "%.0f%%", limit.remaining.rounded(.down)),
+            port: display.number(limit) + "%",
             title: limit.title,
             tag: limit.tag,
             details: ([ResetFormat.long(limit, now: now)] + (age.map { [$0] } ?? [])).joined(separator: " · "),
             usage: nil,
-            help: "\(provider.name) \(limit.title): \(Int(limit.remaining))% left",
+            help: "\(provider.name) \(limit.title): \(display.number(limit))% \(display.word)",
             showsDivider: showsDivider,
             dimmed: pace == .usedUp
         ) {
-            UsageBar(remaining: limit.remaining, expected: limit.expectedRemaining(at: now), color: provider.color)
+            display.bar(limit, color: provider.color, now: now)
                 .frame(width: 180, height: 5)
             Text(pace.label)
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
@@ -246,6 +273,9 @@ struct AILimitRow: View {
 struct ClaudeStatColumn: View {
     @ObservedObject private var ai = AIUsageService.shared
     @AppStorage(AppSettings.aiShowClaudeKey) private var showClaude = true
+    @AppStorage(AppSettings.aiShowUsedKey) private var showsUsed = true
+
+    private var display: AIUsageDisplay { AIUsageDisplay(showsUsed: showsUsed) }
 
     var body: some View {
         StatColumn(label: "Claude", detail: "Session") {
@@ -255,10 +285,8 @@ struct ClaudeStatColumn: View {
                       let session = limits.first(where: { $0.id == "claude.five_hour" }) ?? limits.first {
                 TimelineView(.periodic(from: .now, by: 60)) { context in
                     VStack(alignment: .leading, spacing: 0) {
-                        BigValue(value: String(format: "%.0f", session.remaining.rounded(.down)), unit: "% left")
-                        UsageBar(remaining: session.remaining,
-                                 expected: session.expectedRemaining(at: context.date),
-                                 color: AIProvider.claude.color)
+                        BigValue(value: display.number(session), unit: "% \(display.word)")
+                        display.bar(session, color: AIProvider.claude.color, now: context.date)
                             .frame(height: 5)
                             .padding(.top, 6)
                         Text(legend(session: session, weekly: limits.first { $0.id == "claude.seven_day" && $0 != session }, now: context.date))
@@ -289,7 +317,7 @@ struct ClaudeStatColumn: View {
 
     private func legend(session: UsageLimit, weekly: UsageLimit?, now: Date) -> String {
         var parts = [ResetFormat.short(session, now: now)]
-        if let weekly { parts.append("Weekly \(Int(weekly.remaining.rounded(.down)))%") }
+        if let weekly { parts.append("Weekly \(display.number(weekly))% \(display.word)") }
         return parts.joined(separator: " · ")
     }
 }
@@ -301,13 +329,16 @@ struct AILimitsWidgetView: View {
     @ObservedObject private var ai = AIUsageService.shared
     @AppStorage(AppSettings.aiShowClaudeKey) private var showClaude = true
     @AppStorage(AppSettings.aiShowCodexKey) private var showCodex = true
+    @AppStorage(AppSettings.aiShowUsedKey) private var showsUsed = true
+
+    private var display: AIUsageDisplay { AIUsageDisplay(showsUsed: showsUsed) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("AI limits")
                 .font(.system(size: 13, weight: .semibold))
             if ai.enabledProviders.isEmpty {
-                message("Turn on Claude or Codex in Settings → AI limits.")
+                message("Turn on Claude or Codex in Settings → AI usage.")
             } else {
                 ScrollView(showsIndicators: false) {
                     TimelineView(.periodic(from: .now, by: 60)) { context in
@@ -345,14 +376,14 @@ struct AILimitsWidgetView: View {
                     .lineLimit(1)
                 Spacer(minLength: 6)
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    Text(String(format: "%.0f%%", limit.remaining.rounded(.down)))
+                    Text(display.number(limit) + "%")
                         .font(.system(size: 12, weight: .medium).monospacedDigit())
-                    Text("left")
+                    Text(display.word)
                         .font(.system(size: 10.5))
                         .foregroundStyle(Color.white.opacity(0.45))
                 }
             }
-            UsageBar(remaining: limit.remaining, expected: limit.expectedRemaining(at: now), color: provider.color)
+            display.bar(limit, color: provider.color, now: now)
                 .frame(height: 4)
             Text(([ResetFormat.short(limit, now: now)] + (age.map { [$0] } ?? [])).joined(separator: " · "))
                 .font(.system(size: 9.5))

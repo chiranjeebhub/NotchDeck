@@ -16,7 +16,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .dev: "Dev"
         case .media: "Media"
         case .calendar: "Calendar"
-        case .ai: "AI limits"
+        case .ai: "AI usage"
         case .permissions: "Permissions"
         case .about: "About"
         }
@@ -556,9 +556,20 @@ private struct AILimitsSettings: View {
     @ObservedObject private var ai = AIUsageService.shared
     @AppStorage(AppSettings.aiShowClaudeKey) private var showClaude = true
     @AppStorage(AppSettings.aiShowCodexKey) private var showCodex = true
+    @AppStorage(AppSettings.aiShowUsedKey) private var showsUsed = true
 
     var body: some View {
         Form {
+            Section {
+                Picker("Show", selection: $showsUsed) {
+                    Text("Used").tag(true)
+                    Text("Left").tag(false)
+                }
+                .pickerStyle(.segmented)
+                Caption(showsUsed ? "Numbers and bars show how much of each limit you've used, like \"25% used\"."
+                                  : "Numbers and bars show how much of each limit is left, like \"75% left\".")
+            }
+
             Section {
                 Toggle(isOn: $showClaude) {
                     Text("Claude")
@@ -568,8 +579,10 @@ private struct AILimitsSettings: View {
                     Text("Codex")
                     Caption("Reads the limits Codex records on this Mac while you use it, so they can be a little behind.")
                 }
+            } header: {
+                Text("Apps to show")
             } footer: {
-                Caption("Show them on the Dev tab (the AI limits list, or the Claude slot in the stats strip) or as a Home widget.")
+                Caption("Turn off an app to hide it everywhere. Show your limits on the Dev tab (the AI limits list, or the Claude slot in the stats strip) or as a Home widget.")
             }
 
             Section("Status") {
@@ -600,7 +613,8 @@ private struct AILimitsSettings: View {
         case .loading: return "Not checked yet"
         case .ready(let usage):
             let plan = usage.plan.map { "\($0) plan · " } ?? ""
-            return plan + usage.limits.map { "\($0.title) \(Int($0.remaining.rounded(.down)))%" }.joined(separator: ", ")
+            let display = AIUsageDisplay(showsUsed: showsUsed)
+            return plan + usage.limits.map { "\($0.title) \(display.number($0))% \(display.word)" }.joined(separator: ", ")
         case let other: return ResetFormat.message(for: other) ?? ""
         }
     }

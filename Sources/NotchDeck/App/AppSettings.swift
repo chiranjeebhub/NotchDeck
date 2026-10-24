@@ -41,6 +41,8 @@ enum AppSettings {
     // AI limits
     static let aiShowClaudeKey = "aiShowClaude"
     static let aiShowCodexKey = "aiShowCodex"
+    /// Show how much of each limit is used (true) or how much is left (false).
+    static let aiShowUsedKey = "aiShowUsed"
 
     /// The app was called NotchUtility before; carry its settings and tray over once.
     static func migrateFromNotchUtility() {
@@ -80,6 +82,7 @@ enum AppSettings {
             devConfirmStopKey: true,
             aiShowClaudeKey: true,
             aiShowCodexKey: true,
+            aiShowUsedKey: true,
         ])
     }
 
