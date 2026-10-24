@@ -49,16 +49,12 @@ struct AIUsageDisplay {
         showsUsed ? 100 - limit.remaining : limit.remaining
     }
 
-    func expected(_ limit: UsageLimit, now: Date) -> Double? {
-        limit.expectedRemaining(at: now).map { showsUsed ? 100 - $0 : $0 }
-    }
-
     func number(_ limit: UsageLimit) -> String {
         String(format: "%.0f", value(limit).rounded())
     }
 
     func bar(_ limit: UsageLimit, color: Color, now: Date) -> UsageBar {
-        UsageBar(value: value(limit), expected: expected(limit, now: now), color: color, fillsWithUsed: showsUsed)
+        UsageBar(value: value(limit), color: color)
     }
 }
 
@@ -112,36 +108,20 @@ enum ResetFormat {
     }
 }
 
-/// Filled with what's used (or left), in the provider's colour. The white tick is where you'd be
-/// if you spread your usage evenly over the window.
+/// Filled with what's used (or left), in the provider's colour.
 struct UsageBar: View {
     let value: Double
-    let expected: Double?
     let color: Color
-    let fillsWithUsed: Bool
-
-    private func fraction(_ value: Double) -> CGFloat { CGFloat(min(max(value / 100, 0), 1)) }
 
     var body: some View {
-        // Overlays, so the taller tick never changes the bar's height or pushes into the text below.
         GeometryReader { geometry in
             Capsule()
                 .fill(Color.white.opacity(0.1))
                 .overlay(alignment: .leading) {
                     Capsule().fill(color)
-                        .frame(width: geometry.size.width * fraction(value))
-                }
-                .overlay(alignment: .leading) {
-                    if let expected {
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(Color.white)
-                            .frame(width: 2, height: geometry.size.height + 6)
-                            .offset(x: geometry.size.width * fraction(expected) - 1)
-                    }
+                        .frame(width: geometry.size.width * CGFloat(min(max(value / 100, 0), 1)))
                 }
         }
-        .help(expected == nil ? "" : "The white mark is where you'd be if you used it evenly until the reset. "
-              + (fillsWithUsed ? "Fill short of the mark means it will last." : "Fill past the mark means it will last."))
     }
 }
 
