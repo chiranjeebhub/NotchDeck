@@ -181,6 +181,12 @@ final class NotchWindowController {
         CalendarService.shared.reload()
     }
 
+    /// Closes the notch right away, e.g. when Settings opens.
+    func dismiss() {
+        cancelPending()
+        close()
+    }
+
     private func close() {
         guard viewModel.status == .open else { return }
         staysOpenUntilHovered = false

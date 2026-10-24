@@ -77,20 +77,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let page = (sender as? Notification)?.object as? SettingsPage {
             SettingsNavigation.shared.page = page
         }
-        if settingsWindow == nil {
-            let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()))
-            window.title = "NotchDeck Settings"
-            window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
-            // A toolbar gives the sidebar its full-height, unified look.
-            window.toolbar = NSToolbar(identifier: "Settings")
-            window.toolbarStyle = .unified
-            window.setContentSize(NSSize(width: 760, height: 540))
-            window.isReleasedWhenClosed = false
-            window.center()
-            settingsWindow = window
+        // The open notch floats above normal windows and would cover the top of Settings.
+        controllers.forEach { $0.dismiss() }
+
+        let window = settingsWindow ?? makeSettingsWindow()
+        settingsWindow = window
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        // Show it on the screen the pointer is on, not wherever it was first created.
+        if !window.isVisible, let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) {
+            let visible = screen.visibleFrame
+            let size = window.frame.size
+            window.setFrameOrigin(NSPoint(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2))
         }
-        NSApp.activate()
-        settingsWindow?.makeKeyAndOrderFront(nil)
+        // NotchDeck is a menu bar app, so a plain activate() request can be refused while another
+        // app is in front; ask firmly, and order the window front regardless.
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(nil)
+        window.orderFrontRegardless()
+    }
+
+    private func makeSettingsWindow() -> NSWindow {
+        let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()))
+        window.title = "NotchDeck Settings"
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+        // A toolbar gives the sidebar its full-height, unified look.
+        window.toolbar = NSToolbar(identifier: "Settings")
+        window.toolbarStyle = .unified
+        window.setContentSize(NSSize(width: 760, height: 540))
+        window.isReleasedWhenClosed = false
+        // Open on the current Space, including over a full-screen app, instead of jumping back
+        // to the Space the window was first shown on.
+        window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
+        return window
     }
 
     @objc private func checkForUpdates() {
