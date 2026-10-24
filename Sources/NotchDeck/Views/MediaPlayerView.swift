@@ -123,18 +123,22 @@ struct ArtworkView: View {
     let cornerRadius: CGFloat
 
     var body: some View {
-        ZStack {
-            if let image {
-                Image(nsImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            } else {
-                Color.white.opacity(0.1)
-                Image(systemName: "music.note")
-                    .foregroundStyle(Color.white.opacity(0.5))
+        // Color.clear takes the frame's size; the image fills it as an overlay, so
+        // non-square artwork (e.g. 16:9 video thumbnails) is cropped instead of
+        // widening the view past its frame.
+        Color.clear
+            .overlay {
+                if let image {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else {
+                    Color.white.opacity(0.1)
+                    Image(systemName: "music.note")
+                        .foregroundStyle(Color.white.opacity(0.5))
+                }
             }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }
 
