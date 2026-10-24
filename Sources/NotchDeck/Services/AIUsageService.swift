@@ -281,7 +281,13 @@ enum CodexUsage {
         guard FileManager.default.fileExists(atPath: sessions.path) else { return .notInstalled }
 
         for file in newestSessionFiles(in: sessions) {
-            if let usage = latestUsage(in: file) { return .ready(usage) }
+            guard let usage = latestUsage(in: file) else { continue }
+            // Newer Codex versions often log no limits; numbers older than the weekly window say nothing now.
+            if Date.now.timeIntervalSince(usage.asOf) > 7 * 86400 {
+                let date = usage.asOf.formatted(.dateTime.month(.abbreviated).day())
+                return .failed("Codex hasn't recorded its limits since \(date).")
+            }
+            return .ready(usage)
         }
         return .failed("No usage recorded yet. Use Codex once and it will appear here.")
     }

@@ -329,14 +329,14 @@ struct AILimitsWidgetView: View {
         let state = ai.state(for: provider)
         if let usage = state.usage {
             ForEach(usage.limits) { limit in
-                row(provider, limit, now: now)
+                row(provider, limit, age: ResetFormat.age(of: usage, now: now), now: now)
             }
         } else if let text = ResetFormat.message(for: state) {
             message("\(provider.name): \(text)")
         }
     }
 
-    private func row(_ provider: AIProvider, _ limit: UsageLimit, now: Date) -> some View {
+    private func row(_ provider: AIProvider, _ limit: UsageLimit, age: String?, now: Date) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Circle().fill(provider.color).frame(width: 7, height: 7)
@@ -354,7 +354,7 @@ struct AILimitsWidgetView: View {
             }
             UsageBar(remaining: limit.remaining, expected: limit.expectedRemaining(at: now), color: provider.color)
                 .frame(height: 4)
-            Text(ResetFormat.short(limit, now: now))
+            Text(([ResetFormat.short(limit, now: now)] + (age.map { [$0] } ?? [])).joined(separator: " · "))
                 .font(.system(size: 9.5))
                 .foregroundStyle(Color.white.opacity(0.45))
         }
