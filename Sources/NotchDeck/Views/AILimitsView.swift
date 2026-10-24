@@ -99,19 +99,24 @@ struct UsageBar: View {
     private func fraction(_ value: Double) -> CGFloat { CGFloat(min(max(value / 100, 0), 1)) }
 
     var body: some View {
+        // Overlays, so the taller tick never changes the bar's height or pushes into the text below.
         GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.white.opacity(0.1))
-                Capsule().fill(color)
-                    .frame(width: geometry.size.width * fraction(remaining))
-                if let expected {
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(Color.white)
-                        .frame(width: 2, height: geometry.size.height + 8)
-                        .offset(x: geometry.size.width * fraction(expected) - 1)
+            Capsule()
+                .fill(Color.white.opacity(0.1))
+                .overlay(alignment: .leading) {
+                    Capsule().fill(color)
+                        .frame(width: geometry.size.width * fraction(remaining))
                 }
-            }
+                .overlay(alignment: .leading) {
+                    if let expected {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color.white)
+                            .frame(width: 2, height: geometry.size.height + 6)
+                            .offset(x: geometry.size.width * fraction(expected) - 1)
+                    }
+                }
         }
+        .help(expected == nil ? "" : "The white mark is where you'd be if you used it evenly until the reset. Fill past the mark means it will last.")
     }
 }
 
@@ -332,7 +337,7 @@ struct AILimitsWidgetView: View {
     }
 
     private func row(_ provider: AIProvider, _ limit: UsageLimit, now: Date) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Circle().fill(provider.color).frame(width: 7, height: 7)
                 Text("\(provider.name) \(limit.title.prefix(1).lowercased() + limit.title.dropFirst())")

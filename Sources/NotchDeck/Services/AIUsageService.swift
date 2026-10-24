@@ -270,8 +270,10 @@ enum ClaudeUsage {
 /// Codex writes its rate limits into the session logs under ~/.codex/sessions while you use it,
 /// so the newest entry is the latest known state.
 enum CodexUsage {
-    /// How many of the newest session files to look through.
-    private static let filesToScan = 40
+    /// How many of the newest session files to look through. Most sessions record no limits,
+    /// so this goes back a long way; files without a "codex" limit are skipped with a byte search.
+    private static let filesToScan = 2000
+    private static let marker = Data("\"limit_id\":\"codex\"".utf8)
 
     static func read() -> AIProviderState {
         let sessions = FileManager.default.homeDirectoryForCurrentUser
@@ -298,9 +300,11 @@ enum CodexUsage {
 
     /// The last line in the file with a non-null "codex" rate limit.
     private static func latestUsage(in file: URL) -> AIProviderUsage? {
-        guard let data = try? Data(contentsOf: file, options: .mappedIfSafe) else { return nil }
+        guard let data = try? Data(contentsOf: file, options: .mappedIfSafe),
+              data.range(of: marker) != nil else { return nil }
         let text = String(decoding: data, as: UTF8.self)
-        for line in text.split(separator: "\n").reversed() where line.contains("\"rate_limits\":{") {
+        for line in text.split(separator: "\n").reversed()
+        where line.contains("\"rate_limits\"") && !line.contains("\"rate_limits\":null") {
             guard let object = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { continue }
             let payload = object["payload"] as? [String: Any] ?? object
             guard let limits = payload["rate_limits"] as? [String: Any],
