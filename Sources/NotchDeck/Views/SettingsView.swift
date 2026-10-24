@@ -597,7 +597,7 @@ private struct AILimitsSettings: View {
                     HStack {
                         Text(ai.lastRefresh.map { $0.formatted(date: .omitted, time: .shortened) } ?? "Not yet")
                             .foregroundStyle(.secondary)
-                        Button("Refresh Now") { ai.refresh() }
+                        Button("Refresh Now") { ai.refresh(force: true) }
                             .disabled(!showClaude && !showCodex)
                     }
                 }

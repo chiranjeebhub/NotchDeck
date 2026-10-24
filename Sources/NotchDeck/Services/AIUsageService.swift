@@ -2,7 +2,7 @@ import Foundation
 import Security
 
 /// One rate limit of an AI tool, such as Claude's 5-hour session or Codex's weekly limit.
-struct UsageLimit: Identifiable, Equatable {
+struct UsageLimit: Identifiable, Equatable, Codable {
     let id: String
     let title: String
     let tag: String?
@@ -31,7 +31,7 @@ struct UsageLimit: Identifiable, Equatable {
     }
 }
 
-struct AIProviderUsage: Equatable {
+struct AIProviderUsage: Equatable, Codable {
     var plan: String?
     var limits: [UsageLimit]
     /// When the numbers were recorded. Codex only records them while you use it.
@@ -126,22 +126,64 @@ final class AIUsageService: ObservableObject {
         refreshTask = nil
     }
 
-    func refresh() {
+    // Anthropic rate-limits the usage endpoint, so the last answer is kept on disk and
+    // Claude is asked at most every few minutes, even across relaunches.
+    private static let claudeCacheKey = "aiClaudeCache"
+    private static let claudeNextFetchKey = "aiClaudeNextFetch"
+    private static let claudeGap: TimeInterval = 300
+
+    private init() {
+        if let data = UserDefaults.standard.data(forKey: Self.claudeCacheKey),
+           let usage = try? JSONDecoder().decode(AIProviderUsage.self, from: data) {
+            claude = .ready(usage)
+        }
+    }
+
+    private var claudeNextFetch: Date {
+        get { UserDefaults.standard.object(forKey: Self.claudeNextFetchKey) as? Date ?? .distantPast }
+        set { UserDefaults.standard.set(newValue, forKey: Self.claudeNextFetchKey) }
+    }
+
+    /// `force` (Refresh Now) skips the usual gap, but still waits out a rate limit.
+    func refresh(force: Bool = false) {
         guard !isRefreshing else { return }
         isRefreshing = true
         let wantsClaude = AppSettings.isAIProviderEnabled(.claude)
+            && (Date.now >= claudeNextFetch || (force && !claudeRateLimited))
         let wantsCodex = AppSettings.isAIProviderEnabled(.codex)
         Task { [weak self] in
-            async let claudeState: AIProviderState? = wantsClaude ? ClaudeUsage.fetch() : nil
+            async let claudeResult: ClaudeUsage.Result? = wantsClaude ? ClaudeUsage.fetch() : nil
             async let codexState: AIProviderState? = wantsCodex
                 ? Task.detached(priority: .utility) { CodexUsage.read() }.value
                 : nil
-            let (newClaude, newCodex) = await (claudeState, codexState)
+            let (newClaude, newCodex) = await (claudeResult, codexState)
             guard let self else { return }
-            if let newClaude, newClaude != self.claude { self.claude = newClaude }
+            if let newClaude { self.apply(newClaude) }
             if let newCodex, newCodex != self.codex { self.codex = newCodex }
             self.lastRefresh = .now
             self.isRefreshing = false
+        }
+    }
+
+    /// Rate-limit waits are always longer than the usual gap, so a later next fetch means one is running.
+    private var claudeRateLimited: Bool { claudeNextFetch.timeIntervalSinceNow > Self.claudeGap }
+
+    private func apply(_ result: ClaudeUsage.Result) {
+        switch result.state {
+        case .ready(let usage):
+            claudeNextFetch = .now.addingTimeInterval(Self.claudeGap)
+            if let data = try? JSONEncoder().encode(usage) {
+                UserDefaults.standard.set(data, forKey: Self.claudeCacheKey)
+            }
+            claude = result.state
+        case .failed:
+            claudeNextFetch = .now.addingTimeInterval(result.retryAfter ?? 120)
+            // Keep showing the last numbers; their age is shown once they're old.
+            if claude.usage == nil, claude != result.state { claude = result.state }
+        default:
+            claudeNextFetch = .now.addingTimeInterval(Self.claudeGap)
+            UserDefaults.standard.removeObject(forKey: Self.claudeCacheKey)
+            if claude != result.state { claude = result.state }
         }
     }
 }
@@ -161,16 +203,27 @@ enum ClaudeUsage {
         let plan: String?
     }
 
-    static func fetch() async -> AIProviderState {
+    struct Result {
+        let state: AIProviderState
+        /// Set when Anthropic asked us to slow down.
+        var retryAfter: TimeInterval?
+    }
+
+    static func fetch() async -> Result {
+        let (state, retryAfter) = await request()
+        return Result(state: state, retryAfter: retryAfter)
+    }
+
+    private static func request() async -> (AIProviderState, TimeInterval?) {
         let home = FileManager.default.homeDirectoryForCurrentUser
         guard FileManager.default.fileExists(atPath: home.appendingPathComponent(".claude").path) else {
-            return .notInstalled
+            return (.notInstalled, nil)
         }
         guard let credentials = await Task.detached(priority: .utility, operation: { readCredentials() }).value else {
-            return .needsSignIn("Sign in to Claude Code, then allow NotchDeck to read its sign-in.")
+            return (.needsSignIn("Sign in to Claude Code, then allow NotchDeck to read its sign-in."), nil)
         }
         if let expiresAt = credentials.expiresAt, expiresAt < .now {
-            return .needsSignIn("Claude Code's sign-in has expired. Open Claude Code to renew it.")
+            return (.needsSignIn("Claude Code's sign-in has expired. Open Claude Code to renew it."), nil)
         }
 
         var request = URLRequest(url: endpoint, timeoutInterval: 15)
@@ -181,15 +234,20 @@ enum ClaudeUsage {
             let (data, response) = try await URLSession.shared.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             if status == 401 || status == 403 {
-                return .needsSignIn("Claude Code's sign-in has expired. Open Claude Code to renew it.")
+                return (.needsSignIn("Claude Code's sign-in has expired. Open Claude Code to renew it."), nil)
+            }
+            if status == 429 {
+                let header = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Retry-After")
+                let wait = max(header.flatMap(TimeInterval.init) ?? 900, 360)
+                return (.failed("Claude is limiting how often usage can be checked. Trying again in \(Int(wait / 60)) min."), wait)
             }
             guard status == 200,
                   let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                return .failed("Claude usage isn't available right now (HTTP \(status)).")
+                return (.failed("Claude usage isn't available right now (HTTP \(status))."), nil)
             }
-            return .ready(AIProviderUsage(plan: credentials.plan, limits: limits(from: object), asOf: .now))
+            return (.ready(AIProviderUsage(plan: credentials.plan, limits: limits(from: object), asOf: .now)), nil)
         } catch {
-            return .failed("Couldn't reach Claude: \(error.localizedDescription)")
+            return (.failed("Couldn't reach Claude: \(error.localizedDescription)"), nil)
         }
     }
 

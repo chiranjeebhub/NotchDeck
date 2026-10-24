@@ -130,7 +130,7 @@ struct DevView: View {
             }
             RowIconButton(systemImage: "arrow.clockwise", help: "Refresh") {
                 if activeList == .ai {
-                    ai.refresh()
+                    ai.refresh(force: true)
                 } else {
                     Task { await service.refresh() }
                     stats.refreshDocker()
