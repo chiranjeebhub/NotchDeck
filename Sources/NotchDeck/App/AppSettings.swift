@@ -203,7 +203,7 @@ enum DevList: String, CaseIterable, Identifiable {
         case .servers: "Ports your apps are listening on"
         case .containers: "Hidden automatically when Docker isn't running"
         case .processes: "The 5 busiest apps by CPU"
-        case .ai: "What's left of your Claude and Codex limits"
+        case .ai: "Your Claude and Codex usage limits"
         }
     }
 }

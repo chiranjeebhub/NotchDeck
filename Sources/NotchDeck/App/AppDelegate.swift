@@ -100,9 +100,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()))
         window.title = "NotchDeck Settings"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
-        // A toolbar gives the sidebar its full-height, unified look.
-        window.toolbar = NSToolbar(identifier: "Settings")
-        window.toolbarStyle = .unified
+        // No toolbar: the sidebar runs to the top behind the window buttons, with no separator lines.
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.titlebarSeparatorStyle = .none
+        window.isMovableByWindowBackground = true
         window.setContentSize(NSSize(width: 760, height: 540))
         window.isReleasedWhenClosed = false
         // Open on the current Space, including over a full-screen app, instead of jumping back

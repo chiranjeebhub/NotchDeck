@@ -90,8 +90,65 @@ struct SettingsView: View {
         return query.isEmpty || page.title.lowercased().contains(query) || page.keywords.contains(query)
     }
 
+    // A plain sidebar and detail side by side, instead of NavigationSplitView, so there are no
+    // dark divider lines under the title bar or between the columns.
     var body: some View {
-        NavigationSplitView {
+        HStack(spacing: 0) {
+            sidebar
+                .frame(width: 210)
+                .background(SidebarMaterial().ignoresSafeArea())
+            VStack(alignment: .leading, spacing: 0) {
+                Text((navigation.page ?? .general).title)
+                    .font(.system(size: 20, weight: .bold))
+                    .padding(.horizontal, 24)
+                    .padding(.top, 14)
+                Group {
+                    switch navigation.page ?? .general {
+                    case .general: GeneralSettings()
+                    case .appearance: AppearanceSettings()
+                    case .home: HomeSettings()
+                    case .tray: TraySettings()
+                    case .dev: DevSettings()
+                    case .media: MediaSettings()
+                    case .calendar: CalendarSettings()
+                    case .ai: AILimitsSettings()
+                    case .permissions: PermissionsSettings()
+                    case .about: AboutSettings()
+                    }
+                }
+                .formStyle(.grouped)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .frame(minWidth: 720, minHeight: 500)
+        .ignoresSafeArea(edges: .top)
+    }
+
+    private var sidebar: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("Search", text: $search)
+                    .textFieldStyle(.plain)
+                if !search.isEmpty {
+                    Button {
+                        search = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .font(.system(size: 13))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.primary.opacity(0.07)))
+            .padding(.horizontal, 10)
+            // Room for the window buttons.
+            .padding(.top, 44)
+
             List(selection: $navigation.page) {
                 ForEach(Array(SettingsPage.sections.enumerated()), id: \.offset) { _, section in
                     let pages = section.pages.filter(matches)
@@ -104,27 +161,9 @@ struct SettingsView: View {
                     }
                 }
             }
-            .searchable(text: $search, placement: .sidebar)
-            .navigationSplitViewColumnWidth(min: 190, ideal: 200, max: 240)
-        } detail: {
-            Group {
-                switch navigation.page ?? .general {
-                case .general: GeneralSettings()
-                case .appearance: AppearanceSettings()
-                case .home: HomeSettings()
-                case .tray: TraySettings()
-                case .dev: DevSettings()
-                case .media: MediaSettings()
-                case .calendar: CalendarSettings()
-                case .ai: AILimitsSettings()
-                case .permissions: PermissionsSettings()
-                case .about: AboutSettings()
-                }
-            }
-            .formStyle(.grouped)
-            .navigationTitle((navigation.page ?? .general).title)
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
         }
-        .frame(minWidth: 720, minHeight: 500)
     }
 
     private func rows(_ pages: [SettingsPage]) -> some View {
@@ -137,6 +176,19 @@ struct SettingsView: View {
             .tag(page)
         }
     }
+}
+
+/// The translucent material macOS uses behind sidebars.
+private struct SidebarMaterial: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .sidebar
+        view.blendingMode = .behindWindow
+        view.state = .followsWindowActiveState
+        return view
+    }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
 }
 
 /// System Settings–style tile: a white glyph centred in a coloured rounded square.
