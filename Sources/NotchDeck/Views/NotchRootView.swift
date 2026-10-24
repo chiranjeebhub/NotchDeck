@@ -236,6 +236,8 @@ struct HomeView: View {
             CalendarWidgetView()
         case .notes:
             NotesWidgetView()
+        case .aiLimits:
+            AILimitsWidgetView()
         case .none:
             EmptyView()
         }

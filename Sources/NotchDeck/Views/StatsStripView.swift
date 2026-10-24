@@ -37,6 +37,7 @@ struct StatsStripView: View {
         case .battery: batteryColumn
         case .gpu: gpuColumn
         case .uptime: uptimeColumn
+        case .claude: ClaudeStatColumn()
         case .none: EmptyView()
         }
     }

@@ -1,10 +1,11 @@
 import SwiftUI
 
-/// Dev tab: system stats on top, then local servers, Docker containers or top processes.
+/// Dev tab: system stats on top, then local servers, Docker containers, top processes or AI limits.
 /// What it shows is chosen in Settings → Dev.
 struct DevView: View {
     @ObservedObject private var service = PortsService.shared
     @ObservedObject private var stats = SystemStatsService.shared
+    @ObservedObject private var ai = AIUsageService.shared
     @AppStorage(AppSettings.devShowAllPortsKey) private var showAll = false
     @AppStorage("devSection") private var section = DevList.servers
     @AppStorage("devShowAllContainers") private var showAllContainers = false
@@ -44,7 +45,14 @@ struct DevView: View {
         case .servers: ports.count
         case .containers: stats.docker.containers.count
         case .processes: stats.processes.count
+        case .ai: ai.visibleLimits.count
         }
+    }
+
+    /// "Servers  4"; AI limits leaves the count out until it has loaded.
+    private func switcherTitle(_ list: DevList) -> String {
+        let count = count(of: list)
+        return list == .ai && count == 0 ? list.shortTitle : "\(list.shortTitle)  \(count)"
     }
 
     var body: some View {
@@ -65,6 +73,7 @@ struct DevView: View {
                 case .servers: serverList
                 case .containers: containerList
                 case .processes: processList
+                case .ai: AILimitsListView(listHeight: $listHeight)
                 case nil:
                     if !hasStats { nothingToShow }
                 }
@@ -98,7 +107,7 @@ struct DevView: View {
     private func listControls(_ activeList: DevList) -> some View {
         HStack(spacing: 8) {
             SegmentedToggle(
-                options: lists.map { "\($0.shortTitle)  \(count(of: $0))" },
+                options: lists.map(switcherTitle),
                 selection: Binding(
                     get: { lists.firstIndex(of: activeList) ?? 0 },
                     set: { section = lists[$0] }
@@ -116,13 +125,17 @@ struct DevView: View {
                     get: { showAllContainers ? 1 : 0 },
                     set: { showAllContainers = $0 == 1 }
                 ))
-            case .processes:
+            case .processes, .ai:
                 EmptyView()
             }
             RowIconButton(systemImage: "arrow.clockwise", help: "Refresh") {
-                Task { await service.refresh() }
-                stats.refreshDocker()
-                stats.refreshProcesses()
+                if activeList == .ai {
+                    ai.refresh()
+                } else {
+                    Task { await service.refresh() }
+                    stats.refreshDocker()
+                    stats.refreshProcesses()
+                }
             }
         }
     }

@@ -38,6 +38,10 @@ enum AppSettings {
     static let devShowUsageKey = "devShowUsage"
     static let devConfirmStopKey = "devConfirmStop"
 
+    // AI limits
+    static let aiShowClaudeKey = "aiShowClaude"
+    static let aiShowCodexKey = "aiShowCodex"
+
     /// The app was called NotchUtility before; carry its settings and tray over once.
     static func migrateFromNotchUtility() {
         let defaults = UserDefaults.standard
@@ -74,6 +78,8 @@ enum AppSettings {
             devListsKey: DevListOrder.defaultValue.encoded,
             devShowUsageKey: true,
             devConfirmStopKey: true,
+            aiShowClaudeKey: true,
+            aiShowCodexKey: true,
         ])
     }
 
@@ -95,6 +101,17 @@ enum AppSettings {
     static var wantsDocker: Bool { devStatSlots.contains(.docker) || devLists.isEnabled(.containers) }
     static var wantsProcesses: Bool { devLists.isEnabled(.processes) }
 
+    static func aiProviderKey(_ provider: AIProvider) -> String {
+        switch provider {
+        case .claude: aiShowClaudeKey
+        case .codex: aiShowCodexKey
+        }
+    }
+
+    static func isAIProviderEnabled(_ provider: AIProvider) -> Bool {
+        defaults.bool(forKey: aiProviderKey(provider))
+    }
+
     static func parseIDs(_ text: String) -> Set<String> {
         Set(text.split(separator: "\n").map(String.init))
     }
@@ -106,7 +123,7 @@ enum AppSettings {
 
 /// What a slot in the Dev tab's stats strip shows.
 enum StatKind: String, CaseIterable, Identifiable {
-    case cpu, memory, docker, network, disk, battery, gpu, uptime, none
+    case cpu, memory, docker, network, disk, battery, gpu, uptime, claude, none
 
     static let slotCount = 3
     static let defaultSlots: [StatKind] = [.cpu, .memory, .docker]
@@ -123,6 +140,7 @@ enum StatKind: String, CaseIterable, Identifiable {
         case .battery: "Battery"
         case .gpu: "GPU"
         case .uptime: "Uptime"
+        case .claude: "Claude limit"
         case .none: "None"
         }
     }
@@ -137,6 +155,7 @@ enum StatKind: String, CaseIterable, Identifiable {
         case .battery: "battery.75percent"
         case .gpu: "square.stack.3d.up"
         case .uptime: "clock"
+        case .claude: "sparkles"
         case .none: "minus"
         }
     }
@@ -154,7 +173,7 @@ enum StatKind: String, CaseIterable, Identifiable {
 
 /// The lists the Dev tab can show under the stats strip.
 enum DevList: String, CaseIterable, Identifiable {
-    case servers, containers, processes
+    case servers, containers, processes, ai
 
     var id: String { rawValue }
 
@@ -163,6 +182,7 @@ enum DevList: String, CaseIterable, Identifiable {
         case .servers: "Local servers"
         case .containers: "Docker containers"
         case .processes: "Top processes"
+        case .ai: "AI limits"
         }
     }
 
@@ -171,6 +191,7 @@ enum DevList: String, CaseIterable, Identifiable {
         case .servers: "Servers"
         case .containers: "Containers"
         case .processes: "Processes"
+        case .ai: "AI limits"
         }
     }
 
@@ -179,6 +200,7 @@ enum DevList: String, CaseIterable, Identifiable {
         case .servers: "Ports your apps are listening on"
         case .containers: "Hidden automatically when Docker isn't running"
         case .processes: "The 5 busiest apps by CPU"
+        case .ai: "What's left of your Claude and Codex limits"
         }
     }
 }
@@ -196,6 +218,7 @@ struct DevListOrder: Equatable {
         Entry(list: .servers, isEnabled: true),
         Entry(list: .containers, isEnabled: true),
         Entry(list: .processes, isEnabled: false),
+        Entry(list: .ai, isEnabled: true),
     ])
 
     init(entries: [Entry]) {
@@ -210,9 +233,10 @@ struct DevListOrder: Equatable {
                   !entries.contains(where: { $0.list == list }) else { continue }
             entries.append(Entry(list: list, isEnabled: isEnabled))
         }
-        // Lists added in later versions show up at the end, turned off.
+        // Lists added in later versions show up at the end, on or off as they are by default.
         for list in DevList.allCases where !entries.contains(where: { $0.list == list }) {
-            entries.append(Entry(list: list, isEnabled: false))
+            let isEnabled = Self.defaultValue.entries.first { $0.list == list }?.isEnabled ?? false
+            entries.append(Entry(list: list, isEnabled: isEnabled))
         }
         self.entries = entries
     }
@@ -228,7 +252,7 @@ struct DevListOrder: Equatable {
 
 /// Widgets that can fill the left or right side of the Home tab.
 enum HomeWidget: String, CaseIterable, Identifiable {
-    case nowPlaying, calendar, notes, none
+    case nowPlaying, calendar, notes, aiLimits, none
 
     var id: String { rawValue }
 
@@ -237,6 +261,7 @@ enum HomeWidget: String, CaseIterable, Identifiable {
         case .nowPlaying: "Now Playing"
         case .calendar: "Calendar"
         case .notes: "Notes"
+        case .aiLimits: "AI limits"
         case .none: "Nothing"
         }
     }
@@ -246,6 +271,7 @@ enum HomeWidget: String, CaseIterable, Identifiable {
         case .nowPlaying: "music.note"
         case .calendar: "calendar"
         case .notes: "note.text"
+        case .aiLimits: "sparkles"
         case .none: "minus"
         }
     }

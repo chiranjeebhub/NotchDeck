@@ -3,7 +3,7 @@ import ServiceManagement
 import SwiftUI
 
 enum SettingsPage: String, CaseIterable, Identifiable {
-    case general, appearance, home, tray, dev, media, calendar, permissions, about
+    case general, appearance, home, tray, dev, media, calendar, ai, permissions, about
 
     var id: String { rawValue }
 
@@ -16,6 +16,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .dev: "Dev"
         case .media: "Media"
         case .calendar: "Calendar"
+        case .ai: "AI limits"
         case .permissions: "Permissions"
         case .about: "About"
         }
@@ -30,6 +31,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .dev: "terminal.fill"
         case .media: "music.note"
         case .calendar: "calendar"
+        case .ai: "sparkles"
         case .permissions: "hand.raised.fill"
         case .about: "info"
         }
@@ -44,6 +46,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .dev: .green
         case .media: .pink
         case .calendar: .red
+        case .ai: .purple
         case .permissions: .orange
         }
     }
@@ -58,6 +61,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         case .dev: "stats cpu memory docker network disk battery gpu uptime servers ports containers processes"
         case .media: "player spotify music fallback"
         case .calendar: "calendars day month events"
+        case .ai: "claude codex usage limits quota session weekly anthropic openai"
         case .permissions: "privacy access automation calendar"
         case .about: "version github updates sparkle"
         }
@@ -66,7 +70,7 @@ enum SettingsPage: String, CaseIterable, Identifiable {
     static let sections: [(title: String?, pages: [SettingsPage])] = [
         (nil, [.general, .appearance]),
         ("Tabs", [.home, .tray, .dev]),
-        ("System", [.media, .calendar, .permissions, .about]),
+        ("System", [.media, .calendar, .ai, .permissions, .about]),
     ]
 }
 
@@ -112,6 +116,7 @@ struct SettingsView: View {
                 case .dev: DevSettings()
                 case .media: MediaSettings()
                 case .calendar: CalendarSettings()
+                case .ai: AILimitsSettings()
                 case .permissions: PermissionsSettings()
                 case .about: AboutSettings()
                 }
@@ -542,6 +547,62 @@ private struct CalendarSettings: View {
             }
         }
         .onAppear { calendarService.reload() }
+    }
+}
+
+// MARK: - AI limits
+
+private struct AILimitsSettings: View {
+    @ObservedObject private var ai = AIUsageService.shared
+    @AppStorage(AppSettings.aiShowClaudeKey) private var showClaude = true
+    @AppStorage(AppSettings.aiShowCodexKey) private var showCodex = true
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle(isOn: $showClaude) {
+                    Text("Claude")
+                    Caption("Uses Claude Code's sign-in to read your session and weekly limits. macOS asks once whether NotchDeck may read it: choose Always Allow.")
+                }
+                Toggle(isOn: $showCodex) {
+                    Text("Codex")
+                    Caption("Reads the limits Codex records on this Mac while you use it, so they can be a little behind.")
+                }
+            } footer: {
+                Caption("Show them on the Dev tab (the AI limits list, or the Claude slot in the stats strip) or as a Home widget.")
+            }
+
+            Section("Status") {
+                ForEach(AIProvider.allCases) { provider in
+                    LabeledContent(provider.name) {
+                        Text(status(provider))
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.trailing)
+                    }
+                }
+                LabeledContent("Last checked") {
+                    HStack {
+                        Text(ai.lastRefresh.map { $0.formatted(date: .omitted, time: .shortened) } ?? "Not yet")
+                            .foregroundStyle(.secondary)
+                        Button("Refresh Now") { ai.refresh() }
+                            .disabled(!showClaude && !showCodex)
+                    }
+                }
+            }
+        }
+        .onChange(of: showClaude) { _, on in if on { ai.refresh() } }
+        .onChange(of: showCodex) { _, on in if on { ai.refresh() } }
+    }
+
+    private func status(_ provider: AIProvider) -> String {
+        guard AppSettings.isAIProviderEnabled(provider) else { return "Off" }
+        switch ai.state(for: provider) {
+        case .loading: return "Not checked yet"
+        case .ready(let usage):
+            let plan = usage.plan.map { "\($0) plan · " } ?? ""
+            return plan + usage.limits.map { "\($0.title) \(Int($0.remaining.rounded(.down)))%" }.joined(separator: ", ")
+        case let other: return ResetFormat.message(for: other) ?? ""
+        }
     }
 }
 
