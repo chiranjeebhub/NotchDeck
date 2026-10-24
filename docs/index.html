@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>NotchDeck: your MacBook notch, made useful</title>
-  <meta name="description" content="NotchDeck turns the MacBook notch into a hub for media, files, calendar and local dev servers. Free and open source for macOS 14+.">
+  <meta name="description" content="NotchDeck turns the MacBook notch into a hub for media, files, calendar, local dev servers and Claude and Codex usage limits. Free and open source for macOS 14+.">
   <meta name="theme-color" content="#0b0b0f">
   <link rel="icon" type="image/png" href="images/logo.png">
   <link rel="apple-touch-icon" href="images/logo.png">
@@ -26,6 +26,7 @@
       <nav class="nav-links">
         <a href="#features">Features</a>
         <a href="#dev">For developers</a>
+        <a href="#ai">AI limits</a>
         <a href="#install">Install</a>
         <a href="https://github.com/chiranjeebhub/NotchDeck" class="gh">
           <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
@@ -42,7 +43,7 @@
         <img class="hero-icon" src="images/logo.png" alt="NotchDeck app icon" width="104" height="104">
         <p class="eyebrow">Free &amp; open source · macOS 14+</p>
         <h1>Your notch,<br><span class="grad">finally useful.</span></h1>
-        <p class="lede">NotchDeck turns the MacBook notch into a little control deck for your music, files, calendar and the dev servers running on your Mac. Hover to open. Move away and it tucks back in.</p>
+        <p class="lede">NotchDeck turns the MacBook notch into a little control deck for your music, files, calendar, the dev servers running on your Mac and your AI usage limits. Hover to open. Move away and it tucks back in.</p>
         <div class="cta">
           <a class="btn primary" id="download" href="https://github.com/chiranjeebhub/NotchDeck/releases/latest">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M16.37 12.6c-.03-2.6 2.12-3.85 2.22-3.91-1.21-1.77-3.09-2.01-3.76-2.04-1.6-.16-3.12.94-3.93.94-.81 0-2.06-.92-3.39-.89-1.74.03-3.35 1.01-4.25 2.57-1.81 3.14-.46 7.79 1.3 10.34.86 1.25 1.89 2.65 3.24 2.6 1.3-.05 1.79-.84 3.36-.84s2.01.84 3.38.81c1.4-.02 2.29-1.27 3.14-2.53.99-1.45 1.4-2.85 1.42-2.93-.03-.01-2.72-1.04-2.75-4.13zM13.78 4.96c.72-.87 1.2-2.07 1.07-3.27-1.03.04-2.28.69-3.02 1.55-.66.77-1.24 2-1.09 3.18 1.15.09 2.32-.58 3.04-1.46z"/></svg>
@@ -152,15 +153,44 @@
       </div>
     </section>
 
-    <section class="section soon">
-      <div class="wrap">
-        <div class="soon-card">
-          <span class="badge">Coming soon</span>
-          <h2>AI usage limits, at a glance</h2>
-          <p>See how much of your Claude and Codex usage window is left, and when it resets, right from the notch. No more surprise rate limits halfway through a refactor.</p>
-          <div class="meters" aria-hidden="true">
-            <div class="meter"><span>Claude · 5h window</span><div class="bar"><i style="--w:62%;--c:#d97757"></i></div><em>62%</em></div>
-            <div class="meter"><span>Codex · weekly</span><div class="bar"><i style="--w:28%;--c:#3ddc84"></i></div><em>28%</em></div>
+    <section id="ai" class="section split ai">
+      <div class="wrap split-inner">
+        <div class="split-copy">
+          <p class="kicker amber">New in 0.2</p>
+          <h2>Never get <span style="white-space:nowrap">rate-limited</span> by surprise.</h2>
+          <p>See how much of your Claude and Codex limits you've used, and when each one resets, without leaving what you're doing. NotchDeck reads Claude Code's sign-in and the limits Codex records on your Mac, so there's nothing to set up.</p>
+          <ul class="checks amber">
+            <li>Claude's 5-hour session and weekly limits, including per-model ones</li>
+            <li>Codex session and weekly limits</li>
+            <li>A pace hint, so you know if you're on track to last the week</li>
+            <li>An AI limits list on the Dev tab, a Claude slot for the stats strip, or a Home widget</li>
+            <li>Show what's used or what's left, and turn either app off</li>
+          </ul>
+        </div>
+        <div class="split-media">
+          <div class="ai-mock" role="img" aria-label="AI limits list showing Claude and Codex usage with reset times">
+            <div class="ai-head"><i class="logo claude">✳</i>CLAUDE · MAX</div>
+            <div class="ai-row">
+              <span class="dot claude"></span><b class="pct">38%</b>
+              <div class="ai-meta"><div><strong>Session</strong><em>5-hour window</em></div><small>Resets in 3h 38m · at 2:50 PM</small></div>
+              <div class="ai-bar"><i style="--w:38%;--c:#e08a6e"></i></div><span class="pace on">on pace</span>
+            </div>
+            <div class="ai-row">
+              <span class="dot claude"></span><b class="pct">71%</b>
+              <div class="ai-meta"><div><strong>Weekly</strong><em>all models</em></div><small>Resets in 2d 4h · Mon 9:00 AM</small></div>
+              <div class="ai-bar"><i style="--w:71%;--c:#e08a6e"></i></div><span class="pace behind">behind pace</span>
+            </div>
+            <div class="ai-head"><i class="logo codex">&lt;/&gt;</i>CODEX · PLUS</div>
+            <div class="ai-row">
+              <span class="dot codex"></span><b class="pct">12%</b>
+              <div class="ai-meta"><div><strong>Session</strong></div><small>Resets in 4h 10m · at 3:22 PM</small></div>
+              <div class="ai-bar"><i style="--w:12%;--c:#e6e8eb"></i></div><span class="pace plenty">plenty left</span>
+            </div>
+            <div class="ai-row">
+              <span class="dot codex"></span><b class="pct">28%</b>
+              <div class="ai-meta"><div><strong>Weekly</strong></div><small>Resets in 5d 1h · Thu 11:00 AM</small></div>
+              <div class="ai-bar"><i style="--w:28%;--c:#e6e8eb"></i></div><span class="pace plenty">plenty left</span>
+            </div>
           </div>
         </div>
       </div>
