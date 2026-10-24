@@ -124,6 +124,14 @@ For each release:
 Issues and pull requests are welcome. Please build with `./scripts/build-app.sh` and try your change
 in the bundled app before opening a PR.
 
+## More free Mac apps by me
+
+| | |
+| --- | --- |
+| [Clipstack](https://github.com/chiranjeebhub/ClipStack) | Clipboard history for your Mac. ⇧⌘V, search, paste. |
+| [Shotwright](https://github.com/chiranjeebhub/Shotwright) | Screenshots, screen recordings and annotations for macOS. |
+| [Sweep](https://github.com/chiranjeebhub/Sweep) | A fast, native Mac cleaner. |
+
 ## License
 
 [MIT](LICENSE) © Chiranjeeb Jena.
