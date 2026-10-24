@@ -3,6 +3,7 @@
 </p>
 
 <p align="center">
+  <a href="https://chiranjeebhub.github.io/NotchDeck/"><img src="https://img.shields.io/badge/website-notchdeck-7b6cff" alt="Website"></a>
   <a href="https://github.com/chiranjeebhub/NotchDeck/releases/latest"><img src="https://img.shields.io/github/v/release/chiranjeebhub/NotchDeck?label=download" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-black" alt="macOS 14+">
   <img src="https://img.shields.io/badge/Apple%20silicon%20%26%20Intel-universal-black" alt="Universal">
