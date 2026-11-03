@@ -148,9 +148,10 @@ enum ClaudeHookCLI {
               let object = (try? JSONSerialization.jsonObject(with: input)) as? [String: Any],
               let event = object["hook_event_name"] as? String else { return 0 }
 
-        let defaults = UserDefaults(suiteName: "com.chiranjeebhub.NotchDeck")
-        let approves = defaults?.object(forKey: AppSettings.agentsApproveInNotchKey) as? Bool ?? true
-        let wait = max(5, defaults?.object(forKey: AppSettings.agentsApprovalWaitKey) as? Double ?? 30)
+        // This runs from inside NotchDeck.app, so the standard defaults are the app's settings.
+        let defaults = UserDefaults.standard
+        let approves = defaults.object(forKey: AppSettings.agentsApproveInNotchKey) as? Bool ?? true
+        let wait = max(5, defaults.object(forKey: AppSettings.agentsApprovalWaitKey) as? Double ?? 30)
         let wantsReply = event == "PermissionRequest" && approves
 
         let id = UUID().uuidString
@@ -176,9 +177,9 @@ enum ClaudeHookCLI {
         guard wantsReply else { return 0 }
         let reply = waitForReply(id: id, timeout: wait)
         switch reply {
-        case "allow", "deny":
-            var decision: [String: Any] = ["behavior": reply]
-            if reply == "deny" { decision["message"] = "Denied from NotchDeck." }
+        case .some(let behavior) where behavior == "allow" || behavior == "deny":
+            var decision: [String: Any] = ["behavior": behavior]
+            if behavior == "deny" { decision["message"] = "Denied from NotchDeck." }
             let output: [String: Any] = [
                 "hookSpecificOutput": ["hookEventName": "PermissionRequest", "decision": decision],
             ]

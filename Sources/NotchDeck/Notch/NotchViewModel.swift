@@ -81,7 +81,7 @@ final class NotchViewModel: ObservableObject {
     }
 
     /// Width of each side of the closed notch while it shows an agent or a command.
-    static let activitySideWidth: CGFloat = 96
+    static let activitySideWidth: CGFloat = 108
 
     /// What the closed notch shows beside the camera: an agent that needs you first, then a
     /// short "finished" note, then a running command, then music.
