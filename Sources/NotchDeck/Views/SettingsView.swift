@@ -822,7 +822,7 @@ private struct AILimitsSettings: View {
             Section {
                 Toggle(isOn: $showClaude) {
                     Text("Claude")
-                    Caption("Uses Claude Code's sign-in to read your session and weekly limits. macOS asks once whether NotchDeck may read it: choose Always Allow.")
+                    Caption("Uses Claude Code's sign-in to read your session and weekly limits. It is read through macOS's own security tool and kept until it expires. If macOS asks, choose Always Allow.")
                 }
                 Toggle(isOn: $showCodex) {
                     Text("Codex")

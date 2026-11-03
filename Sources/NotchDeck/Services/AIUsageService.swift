@@ -1,5 +1,4 @@
 import Foundation
-import Security
 
 /// One rate limit of an AI tool, such as Claude's 5-hour session or Codex's weekly limit.
 struct UsageLimit: Identifiable, Equatable, Codable {
@@ -219,7 +218,7 @@ enum ClaudeUsage {
         guard FileManager.default.fileExists(atPath: home.appendingPathComponent(".claude").path) else {
             return (.notInstalled, nil)
         }
-        guard let credentials = await Task.detached(priority: .utility, operation: { readCredentials() }).value else {
+        guard let credentials = await Task.detached(priority: .utility, operation: { currentCredentials() }).value else {
             return (.needsSignIn("Sign in to Claude Code, then allow NotchDeck to read its sign-in."), nil)
         }
         if let expiresAt = credentials.expiresAt, expiresAt < .now {
@@ -234,6 +233,8 @@ enum ClaudeUsage {
             let (data, response) = try await URLSession.shared.data(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             if status == 401 || status == 403 {
+                // Claude Code may have renewed its sign-in since; read it again next time.
+                CredentialCache.shared.clear()
                 return (.needsSignIn("Claude Code's sign-in has expired. Open Claude Code to renew it."), nil)
             }
             if status == 429 {
@@ -303,23 +304,75 @@ enum ClaudeUsage {
         return withFraction.date(from: text) ?? ISO8601DateFormatter().date(from: text)
     }
 
-    /// The first read shows macOS's "allow access" prompt for Claude Code's keychain item.
+    /// Keeps the sign-in between refreshes, so the keychain is only read again once the token has
+    /// expired or been turned down.
+    private final class CredentialCache: @unchecked Sendable {
+        static let shared = CredentialCache()
+        private let lock = NSLock()
+        private var credentials: Credentials?
+
+        func get() -> Credentials? {
+            lock.lock()
+            defer { lock.unlock() }
+            guard let credentials else { return nil }
+            if let expiresAt = credentials.expiresAt, expiresAt.timeIntervalSinceNow < 60 { return nil }
+            return credentials
+        }
+
+        func set(_ credentials: Credentials?) {
+            lock.lock()
+            self.credentials = credentials
+            lock.unlock()
+        }
+
+        func clear() { set(nil) }
+    }
+
+    private static func currentCredentials() -> Credentials? {
+        if let cached = CredentialCache.shared.get() { return cached }
+        let credentials = readCredentials()
+        CredentialCache.shared.set(credentials)
+        return credentials
+    }
+
+    /// Reads the item through `/usr/bin/security`, the same tool Claude Code uses to save it. The
+    /// keychain already trusts that tool for this item, so there's no prompt, and if macOS does ask,
+    /// "Always Allow" sticks: it is tied to Apple's tool, not to NotchDeck's signature, which
+    /// changes with every local build.
     private static func readCredentials() -> Credentials? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: keychainService,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var result: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let data = result as? Data,
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+        process.arguments = ["find-generic-password", "-s", keychainService, "-w"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        do { try process.run() } catch { return nil }
+        let output = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else { return nil }
+
+        let text = String(decoding: output, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        // `security -w` prints the data as hex when it isn't plain text.
+        guard let data = text.hasPrefix("{") ? Data(text.utf8) : hexData(text),
               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let oauth = object["claudeAiOauth"] as? [String: Any],
               let token = oauth["accessToken"] as? String, !token.isEmpty else { return nil }
         let expiresAt = (oauth["expiresAt"] as? NSNumber).map { Date(timeIntervalSince1970: $0.doubleValue / 1000) }
         let plan = (oauth["subscriptionType"] as? String).map { $0.capitalized }
         return Credentials(accessToken: token, expiresAt: expiresAt, plan: plan)
+    }
+
+    private static func hexData(_ text: String) -> Data? {
+        let digits = Array(text.utf8)
+        guard digits.count.isMultiple(of: 2) else { return nil }
+        var data = Data(capacity: digits.count / 2)
+        var index = 0
+        while index < digits.count {
+            guard let byte = UInt8(String(decoding: digits[index..<index + 2], as: UTF8.self), radix: 16) else { return nil }
+            data.append(byte)
+            index += 2
+        }
+        return data
     }
 }
 
