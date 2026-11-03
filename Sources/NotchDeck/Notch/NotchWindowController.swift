@@ -94,10 +94,22 @@ final class NotchWindowController {
             while !Task.isCancelled {
                 guard let self else { return }
                 self.tick()
-                try? await Task.sleep(for: .milliseconds(50))
+                try? await Task.sleep(for: self.pollInterval)
             }
         }
     }
+
+    /// Poll quickly near the notch, or while the mouse is down (a drag may be heading for it), and
+    /// slowly when the cursor is far away, so an idle notch hardly wakes the CPU.
+    private var pollInterval: Duration {
+        guard viewModel.status == .closed, !wasMouseDown, pendingAction == nil else { return .milliseconds(50) }
+        let distanceFromTop = screen.frame.maxY - NSEvent.mouseLocation.y
+        let onThisScreen = NSEvent.mouseLocation.x >= screen.frame.minX && NSEvent.mouseLocation.x <= screen.frame.maxX
+        return onThisScreen && distanceFromTop < Self.nearNotchDistance ? .milliseconds(50) : .milliseconds(250)
+    }
+
+    /// Within this many points of the top edge, the cursor could reach the notch within one slow poll.
+    private static let nearNotchDistance: CGFloat = 220
 
     private func tick() {
         let isMouseDown = NSEvent.pressedMouseButtons & 1 != 0
