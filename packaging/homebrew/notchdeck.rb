@@ -1,8 +1,8 @@
 # Homebrew cask, published in chiranjeebhub/homebrew-tap as Casks/notchdeck.rb.
 # After each release, update `version` and `sha256` (release.sh prints the checksum).
 cask "notchdeck" do
-  version "0.2.0"
-  sha256 "6cc1ac63f0a58c52299eddcb90398489d639650b54dffa4028664fc5096ecb18"
+  version "0.3.0"
+  sha256 "22c21a2617e0840551562e2f12d68beb912d57ea577e9e9e815a256bd86bb086"
 
   url "https://github.com/chiranjeebhub/NotchDeck/releases/download/v#{version}/NotchDeck-#{version}.dmg"
   name "NotchDeck"
