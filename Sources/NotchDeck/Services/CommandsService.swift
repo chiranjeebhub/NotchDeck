@@ -75,10 +75,20 @@ final class CommandsService: ObservableObject {
         HookPaths.createDirectories()
         HookPaths.removeStaleFiles(in: HookPaths.commands, olderThan: 60)
         watcher = DirectoryWatcher(url: HookPaths.commands) { [weak self] in self?.drain() }
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.tick() }
-        }
         drain()
+    }
+
+    /// Ticks once a second only while a command runs; otherwise the directory watcher is enough.
+    private func updateTimer() {
+        if active.isEmpty {
+            timer?.invalidate()
+            timer = nil
+        } else if timer == nil {
+            timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.tick() }
+            }
+            timer?.tolerance = 0.2
+        }
     }
 
     func lastDuration(of command: ShellCommand) -> TimeInterval? {
@@ -173,6 +183,7 @@ final class CommandsService: ObservableObject {
     }
 
     private func publishRunning() {
+        updateTimer()
         let now = Date.now
         let visible = active.values
             .filter { now.timeIntervalSince($0.startedAt) >= Self.runningThreshold }

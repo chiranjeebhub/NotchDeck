@@ -100,9 +100,10 @@ final class AgentsService: ObservableObject {
         HookPaths.removeStaleFiles(in: HookPaths.agentEvents, olderThan: 10 * 60)
         HookPaths.removeStaleFiles(in: HookPaths.agentReplies, olderThan: 10 * 60)
         watcher = DirectoryWatcher(url: HookPaths.agentEvents) { [weak self] in self?.drainEvents() }
-        timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
         }
+        timer?.tolerance = 1
         refreshConnection()
         drainEvents()
         tick()
