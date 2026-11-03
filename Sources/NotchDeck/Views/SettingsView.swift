@@ -55,10 +55,10 @@ enum SettingsPage: String, CaseIterable, Identifiable {
     var keywords: String {
         switch self {
         case .general: "launch login displays haptic hover click delay open"
-        case .appearance: "music closed notch live activity labels icons"
+        case .appearance: "music closed notch live activity labels icons tabs order reorder arrange agents commands"
         case .home: "widgets layout now playing calendar notes left right"
         case .tray: "airdrop files copy drop"
-        case .dev: "stats cpu memory docker network disk battery gpu uptime servers ports containers processes"
+        case .dev: "stats cpu memory docker network disk battery gpu uptime servers ports containers processes agents claude code codex hooks approve commands shell zsh bash fish builds tests"
         case .media: "player spotify music fallback"
         case .calendar: "calendars day month events"
         case .ai: "claude codex usage limits quota session weekly anthropic openai"
@@ -67,11 +67,21 @@ enum SettingsPage: String, CaseIterable, Identifiable {
         }
     }
 
-    static let sections: [(title: String?, pages: [SettingsPage])] = [
-        (nil, [.general, .appearance]),
-        ("Tabs", [.home, .tray, .dev]),
-        ("System", [.media, .calendar, .ai, .permissions, .about]),
-    ]
+    /// The tab pages follow the order of the tabs in the notch.
+    static var sections: [(title: String?, pages: [SettingsPage])] {
+        let tabs: [SettingsPage] = AppSettings.tabOrder.map { tab in
+            switch tab {
+            case .home: .home
+            case .tray: .tray
+            case .dev: .dev
+            }
+        }
+        return [
+            (nil, [.general, .appearance]),
+            ("Tabs", tabs),
+            ("System", [.media, .calendar, .ai, .permissions, .about]),
+        ]
+    }
 }
 
 /// Which page the settings window shows; the notch can open it on a given page.
@@ -84,6 +94,8 @@ final class SettingsNavigation: ObservableObject {
 struct SettingsView: View {
     @ObservedObject private var navigation = SettingsNavigation.shared
     @State private var search = ""
+    // Read so the sidebar follows the tab order.
+    @AppStorage(AppSettings.tabOrderKey) private var tabOrderText = TabOrder.defaultValue
 
     private func matches(_ page: SettingsPage) -> Bool {
         let query = search.trimmingCharacters(in: .whitespaces).lowercased()
@@ -150,6 +162,7 @@ struct SettingsView: View {
             .padding(.top, 44)
 
             List(selection: $navigation.page) {
+                let _ = tabOrderText
                 ForEach(Array(SettingsPage.sections.enumerated()), id: \.offset) { _, section in
                     let pages = section.pages.filter(matches)
                     if !pages.isEmpty {
@@ -276,27 +289,94 @@ private struct GeneralSettings: View {
 
 private struct AppearanceSettings: View {
     @AppStorage(AppSettings.showLiveActivityKey) private var showLiveActivity = true
+    @AppStorage(AppSettings.closedShowAgentsKey) private var closedShowsAgents = true
+    @AppStorage(AppSettings.closedShowCommandsKey) private var closedShowsCommands = true
     @AppStorage(AppSettings.showTabLabelsKey) private var showTabLabels = true
+    @AppStorage(AppSettings.tabOrderKey) private var tabOrderText = TabOrder.defaultValue
     @AppStorage(AppSettings.showHomeTabKey) private var showHome = true
     @AppStorage(AppSettings.showTrayTabKey) private var showTray = true
     @AppStorage(AppSettings.showDevTabKey) private var showDev = true
+
+    private var order: [NotchViewModel.Tab] { TabOrder.parse(tabOrderText) }
+
+    private func isShown(_ tab: NotchViewModel.Tab) -> Binding<Bool> {
+        switch tab {
+        case .home: $showHome
+        case .tray: $showTray
+        case .dev: $showDev
+        }
+    }
+
+    private func move(_ index: Int, by offset: Int) {
+        var tabs = order
+        tabs.swapAt(index, index + offset)
+        tabOrderText = TabOrder.encode(tabs)
+    }
 
     var body: some View {
         Form {
             Section {
                 Toggle(isOn: $showLiveActivity) {
-                    Text("Show music in the closed notch")
+                    Text("Music")
                     Caption("Album art and a level meter beside the camera while something plays.")
                 }
-                Toggle("Show tab names", isOn: $showTabLabels)
-            }
-            Section("Tabs") {
-                Toggle("Home", isOn: $showHome)
-                Toggle(isOn: $showTray) {
-                    Text("Tray")
-                    Caption("Dragging a file onto the notch still opens the Tray.")
+                Toggle(isOn: $closedShowsAgents) {
+                    Text("Agents that need you")
+                    Caption("Claude Code or Codex waiting for an answer, and a short note when one finishes.")
                 }
-                Toggle("Dev", isOn: $showDev)
+                Toggle(isOn: $closedShowsCommands) {
+                    Text("Long commands")
+                    Caption("A timer while a build or test runs, then a tick or a cross when it ends. Dev servers and watchers are left out.")
+                }
+            } header: {
+                Text("Show in the closed notch")
+            } footer: {
+                Caption("When several things are going on, an agent that needs you comes first, then commands, then music.")
+            }
+
+            Section {
+                ForEach(Array(order.enumerated()), id: \.element) { index, tab in
+                    HStack(spacing: 10) {
+                        Image(systemName: tab.systemImage)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 18)
+                        Toggle(isOn: isShown(tab)) {
+                            Text(tab.title)
+                            if tab == .tray {
+                                Caption("Dragging a file onto the notch still opens the Tray.")
+                            } else if index == 0 {
+                                Caption("The notch opens on this tab.")
+                            }
+                        }
+                        Spacer()
+                        Button {
+                            move(index, by: -1)
+                        } label: {
+                            Image(systemName: "chevron.up")
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(index == 0)
+                        .help("Move up")
+                        Button {
+                            move(index, by: 1)
+                        } label: {
+                            Image(systemName: "chevron.down")
+                        }
+                        .buttonStyle(.borderless)
+                        .disabled(index == order.count - 1)
+                        .help("Move down")
+                    }
+                }
+                Toggle("Show tab names", isOn: $showTabLabels)
+            } header: {
+                Text("Tabs")
+            } footer: {
+                HStack {
+                    Caption("Top to bottom is left to right in the notch. You can also drag the tabs in the notch, or right-click one.")
+                    Spacer()
+                    Button("Reset Order") { tabOrderText = TabOrder.defaultValue }
+                        .disabled(order == TabOrder.parse(TabOrder.defaultValue))
+                }
             }
         }
     }
@@ -488,6 +568,123 @@ private struct DevSettings: View {
                 Toggle("Show CPU and memory on each row", isOn: $showUsage)
                 Toggle("Stop asks for confirmation", isOn: $confirmStop)
             }
+
+            AgentSettingsSection()
+            CommandSettingsSection()
+        }
+    }
+}
+
+/// Connects Claude Code's hooks and chooses how permission prompts are answered.
+private struct AgentSettingsSection: View {
+    @ObservedObject private var agents = AgentsService.shared
+    @AppStorage(AppSettings.agentsApproveInNotchKey) private var approvesInNotch = true
+    @AppStorage(AppSettings.agentsApprovalWaitKey) private var approvalWait = 30.0
+    @AppStorage(AppSettings.agentsShowCodexKey) private var showCodex = true
+    @State private var failed = false
+
+    var body: some View {
+        Section {
+            LabeledContent {
+                if agents.claudeConnected {
+                    Button("Disconnect") {
+                        failed = !ClaudeHookInstaller.uninstall()
+                        agents.refreshConnection()
+                    }
+                } else {
+                    Button("Connect") {
+                        failed = !ClaudeHookInstaller.install()
+                        agents.refreshConnection()
+                    }
+                    .disabled(!ClaudeHookInstaller.isClaudeInstalled)
+                }
+            } label: {
+                Text("Claude Code")
+                if failed {
+                    Caption("Couldn't update ~/.claude/settings.json. Check that it's valid JSON.")
+                } else if agents.claudeConnected {
+                    Caption("Connected. New Claude Code sessions show up in the notch.")
+                } else if ClaudeHookInstaller.isClaudeInstalled {
+                    Caption("Adds NotchDeck's hooks to ~/.claude/settings.json and keeps your own. A backup is saved next to it.")
+                } else {
+                    Caption("Claude Code isn't set up on this Mac.")
+                }
+            }
+            Toggle(isOn: $approvesInNotch) {
+                Text("Answer permission prompts in the notch")
+                Caption("Allow or Deny from the notch. If you don't answer in time, Claude Code asks in the terminal as usual.")
+            }
+            .disabled(!agents.claudeConnected)
+            if approvesInNotch {
+                Picker("Wait for an answer", selection: $approvalWait) {
+                    Text("15 seconds").tag(15.0)
+                    Text("30 seconds").tag(30.0)
+                    Text("1 minute").tag(60.0)
+                    Text("2 minutes").tag(120.0)
+                }
+                .disabled(!agents.claudeConnected)
+            }
+            Toggle(isOn: $showCodex) {
+                Text("Codex")
+                Caption("Reads the session logs Codex keeps on this Mac. Answer Codex's prompts in its terminal.")
+            }
+        } header: {
+            Text("AI agents")
+        } footer: {
+            Caption("Turn on the Agents list above to see sessions on the Dev tab.")
+        }
+    }
+}
+
+/// Installs the shell snippet that reports long-running commands.
+private struct CommandSettingsSection: View {
+    @AppStorage(AppSettings.commandsMinimumSecondsKey) private var minimumSeconds = 10.0
+    @AppStorage(AppSettings.commandsPlaySoundKey) private var playsSound = false
+    /// Bumped after installing, so the rows re-read the shell files.
+    @State private var revision = 0
+    @State private var copied: ShellIntegration?
+
+    var body: some View {
+        Section {
+            let _ = revision
+            ForEach(ShellIntegration.allCases.filter(\.isAvailable)) { shell in
+                LabeledContent {
+                    HStack {
+                        Button(copied == shell ? "Copied" : "Copy Line") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(shell.loaderLine, forType: .string)
+                            copied = shell
+                        }
+                        .buttonStyle(.borderless)
+                        if shell.isInstalled {
+                            Button("Remove") {
+                                shell.uninstall()
+                                revision += 1
+                            }
+                        } else {
+                            Button("Add") {
+                                shell.install()
+                                revision += 1
+                            }
+                        }
+                    }
+                } label: {
+                    Text(shell.rawValue)
+                    Caption(shell.isInstalled ? "On in \(shell.rcDisplayPath). New terminal windows pick it up."
+                                              : "Adds one line to \(shell.rcDisplayPath).")
+                }
+            }
+            Picker("Count a command as long after", selection: $minimumSeconds) {
+                Text("5 seconds").tag(5.0)
+                Text("10 seconds").tag(10.0)
+                Text("30 seconds").tag(30.0)
+                Text("1 minute").tag(60.0)
+            }
+            Toggle("Play a sound when a long command finishes", isOn: $playsSound)
+        } header: {
+            Text("Long commands")
+        } footer: {
+            Caption("Your shell tells NotchDeck when a command starts and ends; nothing runs in the background. Editors, ssh, REPLs and other interactive programs are left out.")
         }
     }
 }

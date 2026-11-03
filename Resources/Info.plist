@@ -35,7 +35,7 @@
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>NotchDeck controls Spotify and Apple Music so you can play, pause and skip tracks from the notch.</string>
+	<string>NotchDeck controls Spotify and Apple Music from the notch, and brings the right Terminal or iTerm tab forward for your agents and commands.</string>
 	<key>NSCalendarsUsageDescription</key>
 	<string>NotchDeck shows today's events from your calendars in the notch.</string>
 	<key>NSCalendarsFullAccessUsageDescription</key>

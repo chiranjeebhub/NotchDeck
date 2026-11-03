@@ -18,12 +18,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         CalendarService.shared.start()
         SystemStatsService.shared.startSampling()
         UpdaterService.shared.start()
+        startDeveloperHooks()
         rebuildNotches()
 
         let center = NotificationCenter.default
         center.addObserver(self, selector: #selector(screensChanged), name: NSApplication.didChangeScreenParametersNotification, object: nil)
         center.addObserver(self, selector: #selector(defaultsChanged), name: UserDefaults.didChangeNotification, object: nil)
         center.addObserver(self, selector: #selector(openSettings(_:)), name: .openSettings, object: nil)
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        HookPaths.removePID()
+    }
+
+    /// Claude Code hooks and the shell integration only report to a running NotchDeck.
+    private func startDeveloperHooks() {
+        HookPaths.writePID()
+        ShellIntegration.writeScripts()
+        // If NotchDeck was moved or reinstalled, point Claude Code's hooks at this copy.
+        if ClaudeHookInstaller.needsUpdate { ClaudeHookInstaller.install() }
+        AgentsService.shared.start()
+        CommandsService.shared.start()
     }
 
     // MARK: - Notch windows

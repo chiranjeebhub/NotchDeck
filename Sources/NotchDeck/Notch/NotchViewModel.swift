@@ -17,6 +17,15 @@ final class NotchViewModel: ObservableObject {
             }
         }
 
+        /// The setting that shows or hides this tab.
+        var visibilityKey: String {
+            switch self {
+            case .home: AppSettings.showHomeTabKey
+            case .tray: AppSettings.showTrayTabKey
+            case .dev: AppSettings.showDevTabKey
+            }
+        }
+
         var systemImage: String {
             switch self {
             case .home: "rectangle.3.group"
@@ -26,15 +35,11 @@ final class NotchViewModel: ObservableObject {
         }
     }
 
-    /// Tabs turned on in Settings. The Tray stays reachable while a file is dragged over the notch.
+    /// Tabs turned on in Settings, in the chosen order. The Tray stays reachable while a file is dragged over the notch.
     static func visibleTabs(includingTray: Bool = false) -> [Tab] {
         let defaults = UserDefaults.standard
-        let tabs = Tab.allCases.filter { tab in
-            switch tab {
-            case .home: defaults.bool(forKey: AppSettings.showHomeTabKey)
-            case .tray: includingTray || defaults.bool(forKey: AppSettings.showTrayTabKey)
-            case .dev: defaults.bool(forKey: AppSettings.showDevTabKey)
-            }
+        let tabs = AppSettings.tabOrder.filter { tab in
+            (tab == .tray && includingTray) || defaults.bool(forKey: tab.visibilityKey)
         }
         return tabs.isEmpty ? [.home] : tabs
     }
@@ -63,6 +68,8 @@ final class NotchViewModel: ObservableObject {
     init(screen: NSScreen) {
         hasNotch = NotchGeometry.hasNotch(screen)
         notchSize = NotchGeometry.notchSize(for: screen)
+        // The notch opens on the first tab until you pick another one.
+        tab = Self.visibleTabs().first ?? .home
     }
 
     /// Height of the top row of the open notch, which sits beside the camera housing.
@@ -73,13 +80,47 @@ final class NotchViewModel: ObservableObject {
         isOpen ? 14 : (hasNotch ? 6 : 3)
     }
 
-    /// The closed shape widens to show album art and a level meter while music plays.
-    func showsLiveActivity(isPlaying: Bool) -> Bool {
-        hasNotch && isPlaying && AppSettings.showLiveActivity
+    /// Width of each side of the closed notch while it shows an agent or a command.
+    static let activitySideWidth: CGFloat = 96
+
+    /// What the closed notch shows beside the camera: an agent that needs you first, then a
+    /// short "finished" note, then a running command, then music.
+    func closedActivity(isPlaying: Bool) -> ClosedActivity? {
+        guard hasNotch else { return nil }
+        let agents = AgentsService.shared
+        let commands = CommandsService.shared
+        if AppSettings.closedShowsAgents, let session = agents.waitingSession {
+            return .agentWaiting(session)
+        }
+        if AppSettings.closedShowsCommands, let flash = commands.flash { return .flash(flash) }
+        if AppSettings.closedShowsAgents, let flash = agents.flash { return .flash(flash) }
+        if AppSettings.closedShowsCommands {
+            let running = commands.running.filter { !CommandsService.isOpenEnded($0) }
+            if let first = running.first { return .command(first, others: running.count - 1) }
+        }
+        if isPlaying && AppSettings.showLiveActivity { return .music }
+        return nil
     }
 
     func closedSize(isPlaying: Bool) -> CGSize {
-        guard showsLiveActivity(isPlaying: isPlaying) else { return notchSize }
-        return CGSize(width: notchSize.width + notchSize.height * 2, height: notchSize.height)
+        closedSize(for: closedActivity(isPlaying: isPlaying))
+    }
+
+    func closedSize(for activity: ClosedActivity?) -> CGSize {
+        switch activity {
+        case nil:
+            return notchSize
+        case .music?:
+            return CGSize(width: notchSize.width + notchSize.height * 2, height: notchSize.height)
+        case .some:
+            return CGSize(width: notchSize.width + Self.activitySideWidth * 2, height: notchSize.height)
+        }
+    }
+
+    /// When opening on an agent that needs you (or something that just finished), show it.
+    func focus(on activity: ClosedActivity?) {
+        guard let list = activity?.list, Self.visibleTabs().contains(.dev) else { return }
+        UserDefaults.standard.set(list.rawValue, forKey: DevView.sectionKey)
+        tab = .dev
     }
 }

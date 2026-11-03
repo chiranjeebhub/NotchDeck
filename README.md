@@ -31,10 +31,16 @@ and it tucks back in. Macs without a notch get a slim handle at the top of the s
   then the local servers listening on your Mac (`localhost:3000` and friends) with their project
   folder, CPU and memory, and Open, Copy URL and Stop buttons. Docker containers can be started,
   stopped and tailed, and a Top processes list shows what's busy.
+- **AI agents.** Every Claude Code and Codex session, with what it's doing right now. When Claude Code
+  wants permission, the closed notch lights up and you can Allow or Deny from the notch, or jump
+  straight to its terminal tab. Connect Claude Code with one click in Settings → Dev.
+- **Long commands.** Start a build or test, switch to something else, and the notch shows a timer
+  while it runs and a tick or a cross when it ends, with Re-run. Turn on the one-line shell
+  integration (zsh, bash or fish) in Settings → Dev.
 - **Notes.** A scratch pad that saves as you type.
-- **Make it yours.** A Settings window with a sidebar lets you hide tabs, choose the widgets on
-  either side of Home, pick the three Dev stats, reorder the Dev lists, choose which calendars to
-  show, and set hover or click to open.
+- **Make it yours.** A Settings window with a sidebar lets you hide and rearrange tabs (or drag them
+  in the notch), choose the widgets on either side of Home, pick the three Dev stats, reorder the Dev
+  lists, choose which calendars to show, and set hover or click to open.
 - **Updates itself** through [Sparkle](https://sparkle-project.org).
 
 ## Screenshots

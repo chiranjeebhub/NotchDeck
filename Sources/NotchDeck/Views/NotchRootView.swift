@@ -4,13 +4,17 @@ import UniformTypeIdentifiers
 struct NotchRootView: View {
     @ObservedObject var viewModel: NotchViewModel
     @ObservedObject private var media = NowPlayingService.shared
-    // Read so the view redraws when the setting changes.
+    @ObservedObject private var agents = AgentsService.shared
+    @ObservedObject private var commands = CommandsService.shared
+    // Read so the view redraws when the settings change.
     @AppStorage(AppSettings.showLiveActivityKey) private var showLiveActivity = true
+    @AppStorage(AppSettings.closedShowAgentsKey) private var closedShowsAgents = true
+    @AppStorage(AppSettings.closedShowCommandsKey) private var closedShowsCommands = true
 
     private var isOpen: Bool { viewModel.status == .open }
     private var isPlaying: Bool { media.nowPlaying?.isPlaying ?? false }
-    private var showsLive: Bool { viewModel.showsLiveActivity(isPlaying: isPlaying) }
-    private var size: CGSize { isOpen ? viewModel.openSize : viewModel.closedSize(isPlaying: isPlaying) }
+    private var activity: ClosedActivity? { viewModel.closedActivity(isPlaying: isPlaying) }
+    private var size: CGSize { isOpen ? viewModel.openSize : viewModel.closedSize(for: activity) }
     private var ear: CGFloat { viewModel.earRadius(isOpen: isOpen) }
     private var bottomRadius: CGFloat { isOpen ? 28 : (viewModel.hasNotch ? 10 : 3) }
 
@@ -23,7 +27,7 @@ struct NotchRootView: View {
             .shadow(color: .black.opacity(isOpen ? 0.45 : 0), radius: 10, y: 4)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .animation(.spring(response: 0.38, dampingFraction: 0.8), value: isOpen)
-            .animation(.spring(response: 0.38, dampingFraction: 0.8), value: showsLive)
+            .animation(.spring(response: 0.38, dampingFraction: 0.8), value: activity)
             .animation(.spring(response: 0.38, dampingFraction: 0.85), value: viewModel.openSize.height)
             .preferredColorScheme(.dark)
     }
@@ -33,9 +37,15 @@ struct NotchRootView: View {
         if isOpen {
             OpenNotchView(viewModel: viewModel)
                 .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .top)))
-        } else if showsLive {
-            LiveActivityView(artwork: media.artwork, height: viewModel.notchSize.height)
-                .transition(.opacity)
+        } else if let activity {
+            if activity == .music {
+                LiveActivityView(artwork: media.artwork, height: viewModel.notchSize.height)
+                    .transition(.opacity)
+            } else {
+                ClosedActivityView(activity: activity, sideWidth: NotchViewModel.activitySideWidth - 10,
+                                   height: viewModel.notchSize.height)
+                    .transition(.opacity)
+            }
         }
     }
 }
@@ -65,6 +75,9 @@ struct OpenNotchView: View {
     @AppStorage(AppSettings.showTrayTabKey) private var showTray = true
     @AppStorage(AppSettings.showDevTabKey) private var showDev = true
     @AppStorage(AppSettings.showTabLabelsKey) private var showTabLabels = true
+    @AppStorage(AppSettings.tabOrderKey) private var tabOrderText = TabOrder.defaultValue
+    /// The tab being dragged to a new place in the header.
+    @State private var draggedTab: NotchViewModel.Tab?
     private static let contentTopPadding: CGFloat = 8
     private static let contentBottomPadding: CGFloat = 16
 
@@ -109,7 +122,7 @@ struct OpenNotchView: View {
 
     private var visibleTabs: [NotchViewModel.Tab] {
         // The @AppStorage reads above keep this in sync with Settings.
-        _ = (showHome, showTray, showDev)
+        _ = (showHome, showTray, showDev, tabOrderText)
         return NotchViewModel.visibleTabs(includingTray: viewModel.tab == .tray || viewModel.isDropTargeted)
     }
 
@@ -130,9 +143,16 @@ struct OpenNotchView: View {
                     ) {
                         viewModel.tab = tab
                     }
-                    .help(tab.title)
+                    .help("\(tab.title). Drag to reorder, or right-click for more.")
+                    .onDrag {
+                        draggedTab = tab
+                        return NSItemProvider(object: tab.rawValue as NSString)
+                    }
+                    .onDrop(of: [UTType.text], delegate: TabDropDelegate(target: tab, dragged: $draggedTab))
+                    .contextMenu { tabMenu(tab) }
                 }
             }
+            .animation(.snappy(duration: 0.2), value: visibleTabs)
             .frame(width: headerSideWidth, alignment: .leading)
 
             Spacer(minLength: 0)
@@ -156,6 +176,47 @@ struct OpenNotchView: View {
             .frame(width: headerSideWidth, alignment: .trailing)
         }
         .padding(.horizontal, Self.headerPadding)
+    }
+}
+
+extension OpenNotchView {
+    @ViewBuilder
+    func tabMenu(_ tab: NotchViewModel.Tab) -> some View {
+        let tabs = visibleTabs
+        Button("Move Left") { TabOrder.move(tab, by: -1, among: tabs) }
+            .disabled(tabs.first == tab)
+        Button("Move Right") { TabOrder.move(tab, by: 1, among: tabs) }
+            .disabled(tabs.last == tab)
+        Divider()
+        Button("Hide \(tab.title) Tab") {
+            UserDefaults.standard.set(false, forKey: tab.visibilityKey)
+        }
+        .disabled(tabs.count <= 1)
+        Button("Tab Settings…") {
+            NotificationCenter.default.post(name: .openSettings, object: SettingsPage.appearance)
+        }
+    }
+}
+
+/// Moves the dragged tab as it passes over the others, so the header reorders live.
+struct TabDropDelegate: DropDelegate {
+    let target: NotchViewModel.Tab
+    @Binding var dragged: NotchViewModel.Tab?
+
+    func dropEntered(info: DropInfo) {
+        guard let dragged, dragged != target else { return }
+        withAnimation(.snappy(duration: 0.2)) {
+            TabOrder.place(dragged, at: target)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        dragged = nil
+        return true
     }
 }
 

@@ -171,7 +171,12 @@ final class NotchWindowController {
 
     private func open() {
         guard viewModel.status == .closed else { return }
-        if isDraggingFile { viewModel.tab = .tray }
+        if isDraggingFile {
+            viewModel.tab = .tray
+        } else {
+            let isPlaying = NowPlayingService.shared.nowPlaying?.isPlaying ?? false
+            viewModel.focus(on: viewModel.closedActivity(isPlaying: isPlaying))
+        }
         viewModel.status = .open
         panel.ignoresMouseEvents = false
         if AppSettings.hapticFeedback {

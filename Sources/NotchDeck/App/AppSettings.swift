@@ -17,6 +17,8 @@ enum AppSettings {
     static let showHomeTabKey = "showHomeTab"
     static let showTrayTabKey = "showTrayTab"
     static let showDevTabKey = "showDevTab"
+    /// Comma-separated `NotchViewModel.Tab` raw values, in the order the notch shows them.
+    static let tabOrderKey = "tabOrder"
 
     // Home
     static let homeLeftWidgetKey = "homeLeftWidget"
@@ -37,6 +39,17 @@ enum AppSettings {
     static let devListsKey = "devLists"
     static let devShowUsageKey = "devShowUsage"
     static let devConfirmStopKey = "devConfirmStop"
+
+    // Agents and long commands
+    static let agentsApproveInNotchKey = "agentsApproveInNotch"
+    /// Seconds Claude Code waits for an answer in the notch before asking in the terminal.
+    static let agentsApprovalWaitKey = "agentsApprovalWait"
+    static let agentsShowCodexKey = "agentsShowCodex"
+    /// Commands that take at least this many seconds are listed when they finish.
+    static let commandsMinimumSecondsKey = "commandsMinimumSeconds"
+    static let commandsPlaySoundKey = "commandsPlaySound"
+    static let closedShowAgentsKey = "closedShowAgents"
+    static let closedShowCommandsKey = "closedShowCommands"
 
     // AI limits
     static let aiShowClaudeKey = "aiShowClaude"
@@ -70,6 +83,7 @@ enum AppSettings {
             showHomeTabKey: true,
             showTrayTabKey: true,
             showDevTabKey: true,
+            tabOrderKey: TabOrder.defaultValue,
             homeLeftWidgetKey: HomeWidget.nowPlaying.rawValue,
             homeRightWidgetKey: HomeWidget.calendar.rawValue,
             calendarModeKey: "day",
@@ -80,6 +94,13 @@ enum AppSettings {
             devListsKey: DevListOrder.defaultValue.encoded,
             devShowUsageKey: true,
             devConfirmStopKey: true,
+            agentsApproveInNotchKey: true,
+            agentsApprovalWaitKey: 30,
+            agentsShowCodexKey: true,
+            commandsMinimumSecondsKey: 10,
+            commandsPlaySoundKey: false,
+            closedShowAgentsKey: true,
+            closedShowCommandsKey: true,
             aiShowClaudeKey: true,
             aiShowCodexKey: true,
             aiShowUsedKey: true,
@@ -99,6 +120,14 @@ enum AppSettings {
     static var devStatSlots: [StatKind] { StatKind.slots(from: defaults.string(forKey: devStatSlotsKey) ?? "") }
     static var devLists: DevListOrder { DevListOrder(defaults.string(forKey: devListsKey) ?? "") }
     static var hiddenCalendars: Set<String> { parseIDs(defaults.string(forKey: hiddenCalendarsKey) ?? "") }
+    static var tabOrder: [NotchViewModel.Tab] { TabOrder.parse(defaults.string(forKey: tabOrderKey) ?? "") }
+    static var approvesInNotch: Bool { defaults.bool(forKey: agentsApproveInNotchKey) }
+    static var approvalWait: Double { max(5, defaults.double(forKey: agentsApprovalWaitKey)) }
+    static var showsCodexSessions: Bool { defaults.bool(forKey: agentsShowCodexKey) }
+    static var commandsMinimumSeconds: Double { max(1, defaults.double(forKey: commandsMinimumSecondsKey)) }
+    static var commandsPlaySound: Bool { defaults.bool(forKey: commandsPlaySoundKey) }
+    static var closedShowsAgents: Bool { defaults.bool(forKey: closedShowAgentsKey) }
+    static var closedShowsCommands: Bool { defaults.bool(forKey: closedShowCommandsKey) }
 
     /// Docker is only queried when something on the Dev tab shows it.
     static var wantsDocker: Bool { devStatSlots.contains(.docker) || devLists.isEnabled(.containers) }
@@ -121,6 +150,45 @@ enum AppSettings {
 
     static func encodeIDs(_ ids: Set<String>) -> String {
         ids.sorted().joined(separator: "\n")
+    }
+}
+
+/// The order of the notch's tabs. Every tab is always in the list; hiding one is a separate setting.
+enum TabOrder {
+    static let defaultValue = "home,tray,dev"
+
+    static func parse(_ text: String) -> [NotchViewModel.Tab] {
+        var tabs: [NotchViewModel.Tab] = []
+        for token in text.split(separator: ",") {
+            if let tab = NotchViewModel.Tab(rawValue: String(token)), !tabs.contains(tab) { tabs.append(tab) }
+        }
+        // Tabs added in later versions go at the end.
+        for tab in NotchViewModel.Tab.allCases where !tabs.contains(tab) { tabs.append(tab) }
+        return tabs
+    }
+
+    static func encode(_ tabs: [NotchViewModel.Tab]) -> String {
+        tabs.map(\.rawValue).joined(separator: ",")
+    }
+
+    private static func save(_ tabs: [NotchViewModel.Tab]) {
+        UserDefaults.standard.set(encode(tabs), forKey: AppSettings.tabOrderKey)
+    }
+
+    /// Moves `tab` to where `target` is, as when dragging one tab onto another.
+    static func place(_ tab: NotchViewModel.Tab, at target: NotchViewModel.Tab) {
+        var order = AppSettings.tabOrder
+        guard tab != target, let from = order.firstIndex(of: tab) else { return }
+        order.remove(at: from)
+        guard let to = order.firstIndex(of: target) else { return }
+        order.insert(tab, at: from <= to ? to + 1 : to)
+        save(order)
+    }
+
+    /// Swaps `tab` with its visible neighbour on the left (-1) or right (+1).
+    static func move(_ tab: NotchViewModel.Tab, by offset: Int, among visible: [NotchViewModel.Tab]) {
+        guard let index = visible.firstIndex(of: tab), visible.indices.contains(index + offset) else { return }
+        place(tab, at: visible[index + offset])
     }
 }
 
@@ -176,13 +244,15 @@ enum StatKind: String, CaseIterable, Identifiable {
 
 /// The lists the Dev tab can show under the stats strip.
 enum DevList: String, CaseIterable, Identifiable {
-    case servers, containers, processes, ai
+    case servers, agents, commands, containers, processes, ai
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .servers: "Local servers"
+        case .agents: "AI agents"
+        case .commands: "Long commands"
         case .containers: "Docker containers"
         case .processes: "Top processes"
         case .ai: "AI limits"
@@ -192,6 +262,8 @@ enum DevList: String, CaseIterable, Identifiable {
     var shortTitle: String {
         switch self {
         case .servers: "Servers"
+        case .agents: "Agents"
+        case .commands: "Commands"
         case .containers: "Containers"
         case .processes: "Processes"
         case .ai: "AI limits"
@@ -201,6 +273,8 @@ enum DevList: String, CaseIterable, Identifiable {
     var subtitle: String {
         switch self {
         case .servers: "Ports your apps are listening on"
+        case .agents: "Claude Code and Codex sessions: what they're doing and what needs you"
+        case .commands: "Builds and tests running in your terminal, and how they finished"
         case .containers: "Hidden automatically when Docker isn't running"
         case .processes: "The 5 busiest apps by CPU"
         case .ai: "Your Claude and Codex usage limits"
@@ -219,6 +293,8 @@ struct DevListOrder: Equatable {
 
     static let defaultValue = DevListOrder(entries: [
         Entry(list: .servers, isEnabled: true),
+        Entry(list: .agents, isEnabled: true),
+        Entry(list: .commands, isEnabled: true),
         Entry(list: .containers, isEnabled: true),
         Entry(list: .processes, isEnabled: false),
         Entry(list: .ai, isEnabled: true),

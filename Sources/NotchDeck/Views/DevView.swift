@@ -6,8 +6,11 @@ struct DevView: View {
     @ObservedObject private var service = PortsService.shared
     @ObservedObject private var stats = SystemStatsService.shared
     @ObservedObject private var ai = AIUsageService.shared
+    @ObservedObject private var agents = AgentsService.shared
+    @ObservedObject private var commands = CommandsService.shared
     @AppStorage(AppSettings.devShowAllPortsKey) private var showAll = false
-    @AppStorage("devSection") private var section = DevList.servers
+    static let sectionKey = "devSection"
+    @AppStorage(DevView.sectionKey) private var section = DevList.servers
     @AppStorage("devShowAllContainers") private var showAllContainers = false
     @AppStorage(AppSettings.devStatSlotsKey) private var slotsText = StatKind.encode(StatKind.defaultSlots)
     @AppStorage(AppSettings.devListsKey) private var listsText = DevListOrder.defaultValue.encoded
@@ -46,13 +49,15 @@ struct DevView: View {
         case .containers: stats.docker.containers.count
         case .processes: stats.processes.count
         case .ai: ai.visibleLimits.count
+        case .agents: agents.sessions.count
+        case .commands: commands.running.count + commands.recent.count
         }
     }
 
-    /// "Servers  4"; AI limits leaves the count out until it has loaded.
+    /// "Servers  4"; AI limits, Agents and Commands leave the count out while they have nothing.
     private func switcherTitle(_ list: DevList) -> String {
         let count = count(of: list)
-        return list == .ai && count == 0 ? list.shortTitle : "\(list.shortTitle)  \(count)"
+        return [.ai, .agents, .commands].contains(list) && count == 0 ? list.shortTitle : "\(list.shortTitle)  \(count)"
     }
 
     var body: some View {
@@ -74,6 +79,8 @@ struct DevView: View {
                 case .containers: containerList
                 case .processes: processList
                 case .ai: AILimitsListView(listHeight: $listHeight)
+                case .agents: AgentsListView(listHeight: $listHeight)
+                case .commands: CommandsListView(listHeight: $listHeight)
                 case nil:
                     if !hasStats { nothingToShow }
                 }
@@ -108,6 +115,8 @@ struct DevView: View {
         HStack(spacing: 8) {
             SegmentedToggle(
                 options: lists.map(switcherTitle),
+                // An agent waiting for you gets a dot on its switcher button.
+                highlighted: Set(lists.indices.filter { lists[$0] == .agents && agents.waitingCount > 0 }),
                 selection: Binding(
                     get: { lists.firstIndex(of: activeList) ?? 0 },
                     set: { section = lists[$0] }
@@ -125,17 +134,29 @@ struct DevView: View {
                     get: { showAllContainers ? 1 : 0 },
                     set: { showAllContainers = $0 == 1 }
                 ))
-            case .processes, .ai:
+            case .commands:
+                if !commands.recent.isEmpty {
+                    RowIconButton(systemImage: "trash", help: "Clear recent commands") {
+                        commands.clearRecent()
+                    }
+                }
+            case .processes, .ai, .agents:
                 EmptyView()
             }
-            RowIconButton(systemImage: "arrow.clockwise", help: "Refresh") {
-                if activeList == .ai {
-                    ai.refresh(force: true)
-                } else {
-                    Task { await service.refresh() }
-                    stats.refreshDocker()
-                    stats.refreshProcesses()
-                }
+            if activeList != .agents && activeList != .commands {
+                refreshButton(activeList)
+            }
+        }
+    }
+
+    private func refreshButton(_ activeList: DevList) -> some View {
+        RowIconButton(systemImage: "arrow.clockwise", help: "Refresh") {
+            if activeList == .ai {
+                ai.refresh(force: true)
+            } else {
+                Task { await service.refresh() }
+                stats.refreshDocker()
+                stats.refreshProcesses()
             }
         }
     }
@@ -600,6 +621,8 @@ struct RowIconButton: View {
 /// Compact segmented control styled for the black notch.
 struct SegmentedToggle: View {
     let options: [String]
+    /// Options that get a small orange dot, for something that needs you.
+    var highlighted: Set<Int> = []
     @Binding var selection: Int
 
     var body: some View {
@@ -608,16 +631,23 @@ struct SegmentedToggle: View {
                 Button {
                     selection = index
                 } label: {
-                    Text(options[index])
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(selection == index ? 1 : 0.6))
-                        .padding(.horizontal, 9)
-                        .padding(.vertical, 3)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .fill(Color.white.opacity(selection == index ? 0.18 : 0))
-                        )
-                        .contentShape(Rectangle())
+                    HStack(spacing: 4) {
+                        Text(options[index])
+                        if highlighted.contains(index) {
+                            Circle()
+                                .fill(ActivityColors.waiting)
+                                .frame(width: 5, height: 5)
+                        }
+                    }
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(selection == index ? 1 : 0.6))
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 3)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(Color.white.opacity(selection == index ? 0.18 : 0))
+                    )
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
