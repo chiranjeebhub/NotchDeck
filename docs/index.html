@@ -700,13 +700,14 @@ footer a{text-decoration:none}footer a:hover{color:var(--fg)}
       </div>
       <div class="g-tabs" role="tablist" aria-label="Screenshots" id="g-tabs">
         <button type="button" role="tab" aria-selected="true" data-i="0">Home</button>
-        <button type="button" role="tab" aria-selected="false" data-i="1">Calendar</button>
-        <button type="button" role="tab" aria-selected="false" data-i="2">Tray</button>
-        <button type="button" role="tab" aria-selected="false" data-i="3">Dev</button>
-        <button type="button" role="tab" aria-selected="false" data-i="4">Settings</button>
+        <button type="button" role="tab" aria-selected="false" data-i="1">Servers</button>
+        <button type="button" role="tab" aria-selected="false" data-i="2">Agents</button>
+        <button type="button" role="tab" aria-selected="false" data-i="3">Calendar</button>
+        <button type="button" role="tab" aria-selected="false" data-i="4">Tray</button>
+        <button type="button" role="tab" aria-selected="false" data-i="5">Settings</button>
       </div>
-      <div class="g-frame"><img id="g-img" src="screenshots/home.png" alt="NotchDeck Home: Now Playing next to today's calendar" width="1552" height="526"></div>
-      <p class="g-cap" id="g-cap">Home: what’s playing on the left, what’s next on your calendar on the right.</p>
+      <div class="g-frame"><img id="g-img" src="screenshots/home-ai.png" alt="NotchDeck Home: Now Playing next to Claude's AI limits" width="1427" height="458"></div>
+      <p class="g-cap" id="g-cap">Home: what’s playing on the left, how much of your Claude limits you’ve used on the right.</p>
     </div>
   </div>
 </section>
@@ -957,14 +958,15 @@ footer a{text-decoration:none}footer a:hover{color:var(--fg)}
   }
 
   // ----- gallery -----
-  const shots=[['screenshots/home.png',"NotchDeck Home: Now Playing next to today's calendar","Home: what’s playing on the left, what’s next on your calendar on the right.",1552,526],
+  const shots=[['screenshots/home-ai.png',"NotchDeck Home: Now Playing next to Claude's AI limits","Home: what’s playing on the left, how much of your Claude limits you’ve used on the right.",1427,458],
+               ['screenshots/servers.png','Dev tab with CPU, disk and network stats and the servers running on the Mac','Dev: live stats, then every server running on your Mac with Open, Copy URL and Stop.',1427,858],
+               ['screenshots/agents.png','Dev tab listing two finished Claude Code sessions','Agents: every Claude Code and Codex session, what it last did, and a button back to its terminal.',1427,516],
                ['screenshots/calendar-month.png','Calendar month view with dots on busy days','Switch the calendar to Month for dots on your busy days.',1552,526],
                ['screenshots/tray.png','File tray with an AirDrop tile','The Tray: files you dropped on the notch, ready to drag out or AirDrop.',1552,526],
-               ['screenshots/dev.png','Dev tab with CPU, memory, disk and local servers','Dev: system stats, then every server running on your Mac with Open, Copy and Stop.',1552,766],
                ['screenshots/settings.png','NotchDeck Settings window, Dev page','Settings: choose your tabs, Home widgets, Dev stats and lists, and how the notch opens.',1520,1104]];
   const gt=$('#g-tabs'),gi=$('#g-img'),gc=$('#g-cap');
   gt.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;const x=shots[+b.dataset.i];
-    gi.src=x[0];gi.alt=x[1];gi.width=x[3];gi.height=x[4];gi.classList.toggle('tall',x[4]>900);gc.textContent=x[2];
+    gi.src=x[0];gi.alt=x[1];gi.width=x[3];gi.height=x[4];gi.classList.toggle('tall',x[4]/x[3]>.7);gc.textContent=x[2];
     gt.querySelectorAll('button').forEach(y=>y.setAttribute('aria-selected',String(y===b)))});
   addEventListener('load',()=>shots.slice(1).forEach(s=>{const i=new Image();i.src=s[0]}));
 
