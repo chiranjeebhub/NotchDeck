@@ -21,6 +21,8 @@ struct PermissionRequest: Equatable {
     let detail: String?
     /// False once the request has gone back to the terminal (nobody answered in time).
     var canAnswer: Bool
+    /// When the hook asked. Events from before this can't have answered it.
+    var askedAt: Date
 }
 
 /// One Claude Code or Codex session and what it's doing now.
@@ -201,12 +203,18 @@ final class AgentsService: ObservableObject {
             id: sessionID, kind: .claude, directory: input["cwd"] as? String ?? "",
             status: .ready, detail: "Ready", updatedAt: time
         )
+        // Status hooks run in the background and can land after a newer event was already
+        // shown. One from before an open permission request must not clear it.
+        if let askedAt = session.request?.askedAt, time < askedAt,
+           ["PreToolUse", "PostToolUse", "Notification", "UserPromptSubmit"].contains(name) {
+            return
+        }
         let previous = session.status
         if let cwd = input["cwd"] as? String, !cwd.isEmpty { session.directory = cwd }
         if let tty = TerminalInfo.normalizedTTY(event["tty"] as? String) { session.terminal.tty = tty }
         if let bundleID = event["bundleID"] as? String, !bundleID.isEmpty { session.terminal.bundleID = bundleID }
         if let program = event["termProgram"] as? String, !program.isEmpty { session.terminal.termProgram = program }
-        session.updatedAt = time
+        session.updatedAt = max(session.updatedAt, time)
 
         let tool = input["tool_name"] as? String ?? ""
         let toolInput = input["tool_input"] as? [String: Any] ?? [:]
@@ -233,7 +241,7 @@ final class AgentsService: ObservableObject {
             let canAnswer = event["wantsReply"] as? Bool ?? false
             session.status = .waiting
             session.request = PermissionRequest(id: event["id"] as? String ?? "", summary: description.summary,
-                                                detail: description.detail, canAnswer: canAnswer)
+                                                detail: description.detail, canAnswer: canAnswer, askedAt: time)
             session.detail = canAnswer ? description.summary : "Waiting for you in \(session.terminal.appName)"
         case "NotchDeckReleased":
             if session.request?.id == event["requestID"] as? String {
@@ -251,8 +259,12 @@ final class AgentsService: ObservableObject {
             } else if ["elicitation_dialog", "elicitation_url_dialog", "agent_needs_input"].contains(type) {
                 session.status = .waiting
                 session.detail = message.isEmpty ? "Has a question for you" : AgentText.firstLine(message)
-            } else if type == "idle_prompt", session.status == .working {
+            } else if type == "idle_prompt",
+                      session.status == .working || (session.status == .waiting && session.request?.canAnswer != true) {
+                // Pressing Esc at a prompt or interrupting a turn sends no Stop event; this is the
+                // first sign that Claude Code is back at its prompt.
                 session.status = .done
+                session.request = nil
                 session.finishedAt = time
                 session.detail = "Waiting for your next prompt"
             }
@@ -468,11 +480,16 @@ enum CodexLog {
             (object["timestamp"] as? String).flatMap { formatter.date(from: $0) }
         }
 
+        // Anything Codex logs after an approval request means it was answered and work went on.
+        var activityAfter = false
         scan: for line in tail.split(separator: UInt8(ascii: "\n")).reversed() {
-            guard let object = (try? JSONSerialization.jsonObject(with: Data(line))) as? [String: Any],
-                  object["type"] as? String == "event_msg",
+            guard let object = (try? JSONSerialization.jsonObject(with: Data(line))) as? [String: Any] else { continue }
+            guard object["type"] as? String == "event_msg",
                   let event = object["payload"] as? [String: Any],
-                  let type = event["type"] as? String else { continue }
+                  let type = event["type"] as? String else {
+                if status == nil, object["type"] as? String == "response_item" { activityAfter = true }
+                continue
+            }
             if type == "agent_message", lastMessage == nil {
                 lastMessage = (event["message"] as? String).map(AgentText.firstLine)
             }
@@ -489,15 +506,27 @@ enum CodexLog {
                 status = .done
                 detail = type == "turn_aborted" ? "Stopped" : "Finished"
             case "exec_approval_request", "apply_patch_approval_request", "request_user_input":
-                status = .waiting
-                detail = type == "apply_patch_approval_request" ? "Wants to edit files" : "Wants to run a command"
+                if activityAfter {
+                    status = .working
+                    detail = "Working"
+                } else {
+                    status = .waiting
+                    switch type {
+                    case "apply_patch_approval_request": detail = "Wants to edit files"
+                    case "request_user_input": detail = "Has a question for you"
+                    default: detail = "Wants to run a command"
+                    }
+                }
             case "task_started":
                 status = .working
                 detail = "Working"
                 startedAt = timestamp(object)
                 break scan
-            default:
+            case "token_count":
+                // Logged on its own schedule, not a sign of progress.
                 break
+            default:
+                activityAfter = true
             }
         }
         guard let status else { return nil }

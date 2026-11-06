@@ -96,7 +96,8 @@ final class CommandsService: ObservableObject {
     }
 
     func rerun(_ command: ShellCommand) {
-        TerminalControl.run(command.command, in: command.directory, terminal: command.terminal)
+        TerminalControl.run(command.command, in: command.directory, terminal: command.terminal,
+                            shellPID: command.shellPID)
     }
 
     func focus(_ command: ShellCommand) {
@@ -134,11 +135,23 @@ final class CommandsService: ObservableObject {
         let ordered = files.sorted { a, b in
             a.url.pathExtension != b.url.pathExtension ? a.url.pathExtension == "start" : a.date < b.date
         }
+        // The watcher fires as soon as a file appears, which can be before the shell has written it.
+        // Leave a half-written file (and the end of its command) for the next look.
+        var unfinished = Set<String>()
         for file in ordered {
-            let lines = ((try? String(contentsOf: file.url, encoding: .utf8)) ?? "").components(separatedBy: "\n")
-            try? FileManager.default.removeItem(at: file.url)
             let id = file.url.deletingPathExtension().lastPathComponent
-            if file.url.pathExtension == "start" {
+            let isStart = file.url.pathExtension == "start"
+            let text = (try? String(contentsOf: file.url, encoding: .utf8)) ?? ""
+            if unfinished.contains(id) || !Self.isComplete(text, isStart: isStart) {
+                // Give up on a file that never gets finished.
+                if Date.now.timeIntervalSince(file.date) < 5 {
+                    unfinished.insert(id)
+                    continue
+                }
+            }
+            try? FileManager.default.removeItem(at: file.url)
+            let lines = text.components(separatedBy: "\n")
+            if isStart {
                 started(id: id, lines: lines, at: file.date)
             } else {
                 ended(id: id, lines: lines, at: file.date)
@@ -146,11 +159,49 @@ final class CommandsService: ObservableObject {
         }
         hasReceivedCommands = true
         publishRunning()
+        if !unfinished.isEmpty { scheduleRetry() }
+    }
+
+    private var retryScheduled = false
+
+    private func scheduleRetry() {
+        guard !retryScheduled else { return }
+        retryScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            MainActor.assumeIsolated {
+                self?.retryScheduled = false
+                self?.drain()
+            }
+        }
+    }
+
+    /// Every line the shell writes ends with a newline, so a complete file does too.
+    private static func isComplete(_ text: String, isStart: Bool) -> Bool {
+        guard text.hasSuffix("\n") else { return false }
+        let lines = text.components(separatedBy: "\n")
+        return isStart ? lines.count >= 8 && lines[0] == "start" : lines.count >= 3 && lines[0] == "end"
+    }
+
+    /// bash reports only the first part of `a && b`, so its integration adds the history line after a marker.
+    static let bashHistoryMarker = "--notchdeck-history--"
+
+    private static func commandText(_ lines: ArraySlice<String>) -> String {
+        guard let marker = lines.firstIndex(of: bashHistoryMarker) else {
+            return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        let simple = lines[..<marker].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        var history = lines[(marker + 1)...].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        // "  123  make && make test" (a "*" marks an edited entry).
+        if let range = history.range(of: #"^\d+\*?\s+"#, options: .regularExpression) {
+            history.removeSubrange(range)
+        }
+        // A command left out of the history (HISTCONTROL=ignorespace) shows the one before it instead.
+        return !simple.isEmpty && history.hasPrefix(simple) ? history : simple
     }
 
     private func started(id: String, lines: [String], at date: Date) {
         guard lines.count >= 7, lines[0] == "start", let pid = pid_t(lines[1]) else { return }
-        let command = lines[6...].joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        let command = Self.commandText(lines[6...])
         let terminal = TerminalInfo(tty: TerminalInfo.normalizedTTY(lines[3]),
                                     bundleID: lines[5].isEmpty ? nil : lines[5],
                                     termProgram: lines[4].isEmpty ? nil : lines[4])
@@ -166,6 +217,8 @@ final class CommandsService: ObservableObject {
         guard var command = active.removeValue(forKey: id) else { return }
         command.endedAt = date
         command.exitStatus = lines.count > 1 ? Int32(lines[1].trimmingCharacters(in: .whitespaces)) : nil
+        // 148 (128 + SIGTSTP) means it was suspended with Ctrl-Z, not that it finished.
+        if command.exitStatus == 148 { return }
         guard let duration = command.duration, duration >= AppSettings.commandsMinimumSeconds else { return }
 
         lastDurations[command.command] = duration

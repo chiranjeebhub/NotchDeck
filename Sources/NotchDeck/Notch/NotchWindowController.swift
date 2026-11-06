@@ -58,7 +58,13 @@ final class NotchWindowController {
 
     private var closedHitRect: CGRect {
         let isPlaying = NowPlayingService.shared.nowPlaying?.isPlaying ?? false
-        let size = viewModel.closedSize(isPlaying: isPlaying)
+        let activity = viewModel.closedActivity(isPlaying: isPlaying)
+        var size = viewModel.closedSize(for: activity)
+        if let activity, activity != .music {
+            // An agent or command status reaches well over the menu bar. Only its middle opens the
+            // notch, so pointing at menu bar items beside it doesn't.
+            size.width = viewModel.notchSize.width + viewModel.notchSize.height * 2
+        }
         let ear = viewModel.earRadius(isOpen: false)
         let height = viewModel.hasNotch ? size.height : NotchGeometry.menuBarHeight(for: screen)
         return NotchGeometry.topCenteredRect(width: size.width + ear * 2 + 16, height: height + 2, on: screen)

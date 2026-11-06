@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 struct TrayItem: Identifiable, Codable, Equatable {
     var id = UUID()
     var url: URL
+    /// The file this one was copied from, when "Copy dropped files" is on.
+    var source: URL?
 }
 
 /// Files dropped on the notch. Items are references to the original files and persist across launches.
@@ -33,23 +35,37 @@ final class TrayStore: ObservableObject {
     }()
 
     func add(_ urls: [URL]) {
+        // A file already in the tray (or copied into it) isn't added again.
+        let existing = Set(items.flatMap { [$0.url, $0.source].compactMap { $0 } })
+        let urls = urls.filter { !existing.contains($0) }
+        guard !urls.isEmpty else { return }
         guard AppSettings.trayCopyFiles else {
-            append(urls)
+            append(urls.map { TrayItem(url: $0) })
             return
         }
         Task { [weak self] in
-            let copies = await Task.detached(priority: .userInitiated) { urls.compactMap { TrayStore.makeCopy(of: $0) } }.value
+            let copies = await Task.detached(priority: .userInitiated) {
+                urls.map { TrayItem(url: TrayStore.makeCopy(of: $0), source: $0) }
+            }.value
             self?.append(copies)
         }
     }
 
-    private func append(_ urls: [URL]) {
-        let existing = Set(items.map(\.url))
-        items.append(contentsOf: urls.filter { !existing.contains($0) }.map { TrayItem(url: $0) })
+    private func append(_ newItems: [TrayItem]) {
+        var existing = Set(items.flatMap { [$0.url, $0.source].compactMap { $0 } })
+        for item in newItems {
+            let keys = [item.url, item.source].compactMap { $0 }
+            if keys.contains(where: existing.contains) {
+                deleteCopy(of: item.url)
+                continue
+            }
+            existing.formUnion(keys)
+            items.append(item)
+        }
     }
 
     /// Copies the file into its own folder (so names never clash), keeping its name.
-    nonisolated private static func makeCopy(of url: URL) -> URL? {
+    nonisolated private static func makeCopy(of url: URL) -> URL {
         let folder = copiesDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let destination = folder.appendingPathComponent(url.lastPathComponent)
         do {
@@ -58,6 +74,7 @@ final class TrayStore: ObservableObject {
             return destination
         } catch {
             NSLog("NotchDeck: couldn't copy \(url.path) into the tray: \(error)")
+            try? FileManager.default.removeItem(at: folder)
             return url
         }
     }

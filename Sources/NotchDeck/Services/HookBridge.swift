@@ -522,8 +522,12 @@ enum ShellIntegration: String, CaseIterable, Identifiable {
                 [[ -e "$__notchdeck_pid" ]] || return 0
                 __notchdeck_count=$((__notchdeck_count + 1))
                 __notchdeck_id="$$-$__notchdeck_count-$RANDOM"
-                printf 'start\n%s\n%s\n%s\n%s\n%s\n%s\n' "$$" "$PWD" "$__notchdeck_tty" "$TERM_PROGRAM" \
-                  "$__CFBundleIdentifier" "$BASH_COMMAND" > "$__notchdeck_dir/$__notchdeck_id.start" 2>/dev/null
+                # $BASH_COMMAND is only the first part of `a && b`; the history line has all of it.
+                {
+                  printf 'start\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' "$$" "$PWD" "$__notchdeck_tty" "$TERM_PROGRAM" \
+                    "$__CFBundleIdentifier" "$BASH_COMMAND" "--notchdeck-history--"
+                  HISTTIMEFORMAT= builtin history 1
+                } > "$__notchdeck_dir/$__notchdeck_id.start" 2>/dev/null
               }
 
               __notchdeck_precmd() {

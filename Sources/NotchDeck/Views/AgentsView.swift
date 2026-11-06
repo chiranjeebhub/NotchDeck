@@ -407,7 +407,7 @@ struct FinishedCommandRow: View {
                       foreground: Color.white.opacity(0.8), background: Color.white.opacity(0.07)) {
                 CommandsService.shared.rerun(command)
             }
-            .help(command.terminal.supportsTabControl ? "Run it again in the same tab" : "Run it again in a new Terminal window")
+            .help(command.terminal.supportsTabControl ? "Run it again in the same tab, or in a new window if that tab is busy" : "Run it again in a new Terminal window")
             RowIconButton(systemImage: "arrow.up.forward.app", help: "Show it in \(command.terminal.appName)") {
                 CommandsService.shared.focus(command)
             }

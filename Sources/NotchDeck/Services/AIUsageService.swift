@@ -147,6 +147,7 @@ final class AIUsageService: ObservableObject {
     func refresh(force: Bool = false) {
         guard !isRefreshing else { return }
         isRefreshing = true
+        if force { ClaudeUsage.retrySignIn() }
         let wantsClaude = AppSettings.isAIProviderEnabled(.claude)
             && (Date.now >= claudeNextFetch || (force && !claudeRateLimited))
         let wantsCodex = AppSettings.isAIProviderEnabled(.codex)
@@ -206,6 +207,11 @@ enum ClaudeUsage {
         let state: AIProviderState
         /// Set when Anthropic asked us to slow down.
         var retryAfter: TimeInterval?
+    }
+
+    /// Refresh Now reads the keychain again even if it failed a moment ago.
+    static func retrySignIn() {
+        CredentialCache.shared.clear()
     }
 
     static func fetch() async -> Result {
@@ -310,6 +316,10 @@ enum ClaudeUsage {
         static let shared = CredentialCache()
         private let lock = NSLock()
         private var credentials: Credentials?
+        /// When reading the keychain last failed. If that was a "Deny" on macOS's prompt,
+        /// asking again on every refresh would bring the prompt back every few minutes.
+        private var failedAt: Date?
+        private static let failureBackoff: TimeInterval = 30 * 60
 
         func get() -> Credentials? {
             lock.lock()
@@ -319,17 +329,31 @@ enum ClaudeUsage {
             return credentials
         }
 
+        /// True while a recent failed read should be left alone.
+        var isBackingOff: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return failedAt.map { Date.now.timeIntervalSince($0) < Self.failureBackoff } ?? false
+        }
+
         func set(_ credentials: Credentials?) {
             lock.lock()
             self.credentials = credentials
+            failedAt = credentials == nil ? .now : nil
             lock.unlock()
         }
 
-        func clear() { set(nil) }
+        func clear() {
+            lock.lock()
+            credentials = nil
+            failedAt = nil
+            lock.unlock()
+        }
     }
 
     private static func currentCredentials() -> Credentials? {
         if let cached = CredentialCache.shared.get() { return cached }
+        if CredentialCache.shared.isBackingOff { return nil }
         let credentials = readCredentials()
         CredentialCache.shared.set(credentials)
         return credentials

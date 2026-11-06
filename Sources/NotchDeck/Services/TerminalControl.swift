@@ -13,23 +13,55 @@ enum TerminalControl {
         }
     }
 
-    /// Runs `command` in `directory`: in the same tab when the terminal allows it, otherwise in a new Terminal window.
-    static func run(_ command: String, in directory: String, terminal: TerminalInfo) {
+    /// Runs `command` in `directory`: in the same tab when the terminal allows it and that tab is
+    /// back at its prompt, otherwise in a new window.
+    static func run(_ command: String, in directory: String, terminal: TerminalInfo, shellPID: pid_t) {
         let line = "cd \(shellQuoted(directory)) && \(command)"
-        if terminal.supportsTabControl, let tty = terminal.tty {
-            runAppleScript(terminal.resolvedBundleID == "com.googlecode.iterm2" ? iTermScript(typing: true)
-                                                                                 : terminalScript(typing: true),
-                           arguments: [tty, line])
-        } else {
-            runAppleScript("""
-            on run argv
-                tell application "Terminal"
-                    do script (item 1 of argv)
-                    activate
-                end tell
-            end run
-            """, arguments: [line])
+        let isITerm = terminal.resolvedBundleID == "com.googlecode.iterm2"
+        // Typing into a tab that is busy (an editor, Claude Code, another build) would send the
+        // command to that program instead, so check off the main thread first.
+        DispatchQueue.global(qos: .userInitiated).async {
+            if terminal.supportsTabControl, let tty = terminal.tty, isAtPrompt(shellPID: shellPID, tty: tty) {
+                runAppleScript(isITerm ? iTermScript(typing: true) : terminalScript(typing: true), arguments: [tty, line])
+            } else if isITerm {
+                runAppleScript("""
+                on run argv
+                    tell application "iTerm2"
+                        set newWindow to (create window with default profile)
+                        tell current session of newWindow to write text (item 1 of argv)
+                        activate
+                    end tell
+                end run
+                """, arguments: [line])
+            } else {
+                runAppleScript("""
+                on run argv
+                    tell application "Terminal"
+                        do script (item 1 of argv)
+                        activate
+                    end tell
+                end run
+                """, arguments: [line])
+            }
         }
+    }
+
+    /// True when the shell still runs on `tty` and nothing else has the terminal: its process
+    /// group is the terminal's foreground group.
+    static func isAtPrompt(shellPID: pid_t, tty: String) -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/ps")
+        process.arguments = ["-o", "pgid=,tpgid=,tty=", "-p", "\(shellPID)"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        do { try process.run() } catch { return false }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        let parts = String(decoding: data, as: UTF8.self).split(whereSeparator: \.isWhitespace).map(String.init)
+        guard parts.count == 3, let pgid = Int32(parts[0]), let foreground = Int32(parts[1]) else { return false }
+        // ps shows "ttys003" as "s003".
+        return pgid == foreground && (tty == parts[2] || tty.hasSuffix(parts[2]))
     }
 
     static func activate(bundleID: String) {
