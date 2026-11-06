@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/home.png" alt="NotchDeck Home tab: Now Playing next to the calendar" width="780">
+  <img src="docs/screenshots/home-ai.png" alt="NotchDeck Home tab: Now Playing next to Claude's AI limits" width="780">
 </p>
 
 ## What it does
@@ -51,7 +51,11 @@ and it tucks back in. Macs without a notch get a slim handle at the top of the s
 
 **Dev tab:** system stats and the local servers running on your Mac.
 
-<img src="docs/screenshots/dev.png" alt="Dev tab with CPU, memory, disk and local servers" width="780">
+<img src="docs/screenshots/servers.png" alt="Dev tab with CPU, disk and network stats and the local servers" width="780">
+
+**Agents:** every Claude Code and Codex session and what it last did.
+
+<img src="docs/screenshots/agents.png" alt="Dev tab listing Claude Code sessions" width="780">
 
 **Settings:** pick what each tab shows.
 
